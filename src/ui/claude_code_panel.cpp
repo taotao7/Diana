@@ -1,4 +1,5 @@
 #include "claude_code_panel.h"
+#include "theme.h"
 #include <cstring>
 
 namespace agent47 {
@@ -190,7 +191,8 @@ void ClaudeCodePanel::render_config_editor() {
     
     if (is_active) {
         ImGui::SameLine();
-        ImGui::TextColored(ImVec4(0.4f, 1, 0.4f, 1), "(active)");
+        const auto& theme = get_current_theme();
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(theme.success), "(active)");
     }
     
     if (config_modified_) {

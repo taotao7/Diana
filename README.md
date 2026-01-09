@@ -17,13 +17,11 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 
 ## Supported Agents
 
-| Agent | Config Location | Format | Preset Providers |
-|-------|----------------|--------|------------------|
-| Claude Code | `~/.claude/settings.json` | JSON | anthropic, bedrock, vertex |
-| Codex | `~/.codex/config.toml` | TOML | openai, azure, ollama |
-| OpenCode | `~/.config/opencode/opencode.json` | JSONC | anthropic, openai, azure, ollama |
-
-Custom providers can be entered directly in the Provider field.
+| Agent | Config Location | Format |
+|-------|----------------|--------|
+| Claude Code | `~/.claude/settings.json` | JSON |
+| Codex | `~/.codex/config.toml` | TOML |
+| OpenCode | `~/.config/opencode/opencode.json` | JSONC |
 
 ## Requirements
 
@@ -100,10 +98,9 @@ src/
 │   ├── event_queue.h                # Thread-safe event queue
 │   └── session_events.h             # Event type definitions
 ├── terminal/
-│   ├── terminal_buffer.h/cpp        # Ring buffer for terminal output
+│   ├── vterminal.h/cpp              # libvterm wrapper for VT100/xterm emulation
 │   ├── terminal_session.h/cpp       # Per-tab session state
-│   ├── terminal_panel.h/cpp         # Multi-tab terminal UI
-│   └── ansi_parser.h/cpp            # ANSI escape sequence handling
+│   └── terminal_panel.h/cpp         # Multi-tab terminal UI
 ├── process/
 │   ├── process_runner.h/cpp         # PTY/fork process spawning (POSIX)
 │   └── session_controller.h/cpp     # Agent lifecycle management
