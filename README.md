@@ -37,8 +37,9 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 Providers/models can be entered directly in the configuration fields.
 
 ## Example
-<img width="3200" height="1864" alt="screenshot-20260109-150450" src="https://github.com/user-attachments/assets/67d6ae22-70ac-44b8-ad15-875a2e3b1514" />
-<img width="3200" height="1864" alt="screenshot-20260109-150427" src="https://github.com/user-attachments/assets/c18b2804-2de0-4544-9a64-3cc26f95305b" />
+<img width="4330" height="2224" alt="image" src="https://github.com/user-attachments/assets/de4dcfea-fd5a-43b0-a7e4-bd77ffc2c96e" />
+<img width="4330" height="2224" alt="image" src="https://github.com/user-attachments/assets/5baa322c-8b91-4714-90ce-b240bff293ae" />
+
 
 ## Requirements
 
