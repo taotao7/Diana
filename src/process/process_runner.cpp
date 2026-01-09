@@ -9,6 +9,8 @@
 #include <cstring>
 #include <cerrno>
 #include <termios.h>
+#include <thread>
+#include <chrono>
 
 #if defined(__APPLE__)
 #include <util.h>
@@ -45,6 +47,8 @@ bool ProcessRunner::start(const ProcessConfig& config) {
     }
     
     if (pid_ == 0) {
+        setpgid(0, 0);
+        
         if (!config.working_dir.empty()) {
             if (chdir(config.working_dir.c_str()) != 0) {
                 _exit(127);
@@ -80,7 +84,7 @@ void ProcessRunner::stop() {
     stop_requested_.store(true);
     
     if (pid_ > 0) {
-        ::kill(pid_, SIGTERM);
+        ::kill(-pid_, SIGTERM);
     }
 }
 
@@ -123,6 +127,9 @@ void ProcessRunner::io_thread_func() {
     fds[0].fd = pty_fd_;
     fds[0].events = POLLIN;
     
+    bool exit_reported = false;
+    int exit_code = -1;
+    
     while (!stop_requested_.load()) {
         int ret = poll(fds, 1, 100);
         
@@ -147,25 +154,53 @@ void ProcessRunner::io_thread_func() {
             break;
         }
         
+        // Check if child exited naturally
         int status;
         pid_t result = waitpid(pid_, &status, WNOHANG);
         if (result == pid_) {
-            int exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-            if (exit_callback_) {
-                exit_callback_(exit_code);
-            }
+            exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+            pid_ = -1;
             break;
         }
     }
     
-    if (stop_requested_.load() && pid_ > 0) {
+    // If stop was requested and process is still running, terminate it
+    if (pid_ > 0 && stop_requested_.load()) {
+        // Close PTY first - this sends SIGHUP to the process group
+        close_pty();
+        
+        // Give a moment for SIGHUP to take effect
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
+        
+        // Check if it exited from SIGHUP
         int status;
-        waitpid(pid_, &status, 0);
+        pid_t r = waitpid(pid_, &status, WNOHANG);
+        if (r == pid_) {
+            exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+            pid_ = -1;
+        } else {
+            // Still running, send SIGKILL
+            ::kill(pid_, SIGKILL);
+            ::kill(-pid_, SIGKILL);
+            
+            // Brief wait for SIGKILL
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
+            r = waitpid(pid_, &status, WNOHANG);
+            if (r == pid_) {
+                exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+            }
+            pid_ = -1;
+        }
+    }
+    
+    // Report exit
+    if (exit_callback_ && !exit_reported) {
+        exit_reported = true;
+        exit_callback_(exit_code);
     }
     
     close_pty();
     running_.store(false);
-    pid_ = -1;
 }
 
 void ProcessRunner::close_pty() {

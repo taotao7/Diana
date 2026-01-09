@@ -33,8 +33,12 @@ SessionController::~SessionController() {
 }
 
 void SessionController::start_session(TerminalSession& session) {
-    if (runners_.count(session.id()) && runners_[session.id()]->is_running()) {
-        return;
+    auto it = runners_.find(session.id());
+    if (it != runners_.end()) {
+        if (it->second && it->second->is_running()) {
+            return;
+        }
+        runners_.erase(it);
     }
     
     auto runner = std::make_unique<ProcessRunner>();

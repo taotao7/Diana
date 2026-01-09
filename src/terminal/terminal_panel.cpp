@@ -158,11 +158,16 @@ void TerminalPanel::process_events() {
             }
             else if constexpr (std::is_same_v<T, ExitEvent>) {
                 if (auto* session = find_session(evt.session_id)) {
-                    session->set_state(SessionState::Idle);
                     std::string msg = "\r\n[Process exited with code " + std::to_string(evt.exit_code) + "]\r\n";
                     session->write_to_terminal(msg.data(), msg.size());
                     session->request_scroll_to_bottom();
-                    sessions_to_close_.push_back(evt.session_id);
+                    
+                    if (session->pending_restart()) {
+                        session->set_pending_restart(false);
+                        session->set_state(SessionState::Starting);
+                    } else {
+                        session->set_state(SessionState::Idle);
+                    }
                 }
             }
         }, *event_opt);
@@ -218,9 +223,11 @@ void TerminalPanel::render_control_bar(TerminalSession& session) {
     
     ImGui::PushItemWidth(250);
     const std::string& workdir = session.config().working_dir;
-    std::string display_path = workdir.empty() ? "(not set)" : workdir;
-    ImGui::InputText("##WorkDir", const_cast<char*>(display_path.c_str()), 
-                     display_path.size() + 1, ImGuiInputTextFlags_ReadOnly);
+    char workdir_buf[512];
+    std::strncpy(workdir_buf, workdir.c_str(), sizeof(workdir_buf) - 1);
+    workdir_buf[sizeof(workdir_buf) - 1] = '\0';
+    ImGui::InputTextWithHint("##WorkDir", "Select agent execution path (working directory)", 
+                             workdir_buf, sizeof(workdir_buf), ImGuiInputTextFlags_ReadOnly);
     ImGui::PopItemWidth();
     
     ImGui::SameLine();
@@ -261,10 +268,10 @@ void TerminalPanel::render_control_bar(TerminalSession& session) {
     
     if (is_starting || is_stopping || !is_running) ImGui::BeginDisabled();
     if (ImGui::Button("Restart")) {
+        session.set_pending_restart(true);
         controller_.stop_session(session);
         std::string msg = "\r\n[Restarting...]\r\n";
         session.write_to_terminal(msg.data(), msg.size());
-        session.set_state(SessionState::Starting);
     }
     if (is_starting || is_stopping || !is_running) ImGui::EndDisabled();
     

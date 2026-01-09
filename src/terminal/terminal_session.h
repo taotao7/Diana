@@ -52,6 +52,9 @@ public:
     int scroll_offset() const { return scroll_offset_; }
     void set_scroll_offset(int offset) { scroll_offset_ = offset; }
     
+    bool pending_restart() const { return pending_restart_; }
+    void set_pending_restart(bool v) { pending_restart_ = v; }
+    
     void resize_terminal(int rows, int cols);
     void write_to_terminal(const char* data, size_t len);
     
@@ -67,6 +70,7 @@ private:
     std::string input_buffer_;
     bool scroll_to_bottom_ = true;
     bool user_scrolled_up_ = false;
+    bool pending_restart_ = false;
     int scroll_offset_ = 0;
 };
 
