@@ -13,6 +13,42 @@ namespace {
 const char* APP_NAMES[] = { "Claude Code", "Codex", "OpenCode" };
 constexpr int APP_COUNT = 3;
 
+uint32_t chars_to_utf8_codepoint(const uint32_t* chars) {
+    if (chars[0] == 0) return ' ';
+    return chars[0];
+}
+
+void utf8_encode(uint32_t codepoint, char* out, int* len) {
+    if (codepoint < 0x80) {
+        out[0] = static_cast<char>(codepoint);
+        *len = 1;
+    } else if (codepoint < 0x800) {
+        out[0] = static_cast<char>(0xC0 | (codepoint >> 6));
+        out[1] = static_cast<char>(0x80 | (codepoint & 0x3F));
+        *len = 2;
+    } else if (codepoint < 0x10000) {
+        out[0] = static_cast<char>(0xE0 | (codepoint >> 12));
+        out[1] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+        out[2] = static_cast<char>(0x80 | (codepoint & 0x3F));
+        *len = 3;
+    } else {
+        out[0] = static_cast<char>(0xF0 | (codepoint >> 18));
+        out[1] = static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
+        out[2] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+        out[3] = static_cast<char>(0x80 | (codepoint & 0x3F));
+        *len = 4;
+    }
+}
+
+ImVec4 u32_to_imvec4(uint32_t color) {
+    return ImVec4(
+        ((color >> 0) & 0xFF) / 255.0f,
+        ((color >> 8) & 0xFF) / 255.0f,
+        ((color >> 16) & 0xFF) / 255.0f,
+        ((color >> 24) & 0xFF) / 255.0f
+    );
+}
+
 }
 
 TerminalPanel::TerminalPanel() {
@@ -78,17 +114,15 @@ void TerminalPanel::process_events() {
             
             if constexpr (std::is_same_v<T, OutputEvent>) {
                 if (auto* session = find_session(evt.session_id)) {
-                    const auto& theme = get_current_theme();
-                    uint32_t color = evt.is_stderr ? theme.error : theme.terminal_fg;
-                    session->buffer().append_text(evt.data, color);
+                    session->write_to_terminal(evt.data.data(), evt.data.size());
                     session->request_scroll_to_bottom();
                 }
             }
             else if constexpr (std::is_same_v<T, ExitEvent>) {
                 if (auto* session = find_session(evt.session_id)) {
                     session->set_state(SessionState::Idle);
-                    std::string msg = "Process exited with code " + std::to_string(evt.exit_code);
-                    session->buffer().append_line(msg, get_current_theme().warning);
+                    std::string msg = "\r\n[Process exited with code " + std::to_string(evt.exit_code) + "]\r\n";
+                    session->write_to_terminal(msg.data(), msg.size());
                     session->request_scroll_to_bottom();
                 }
             }
@@ -189,7 +223,8 @@ void TerminalPanel::render_control_bar(TerminalSession& session) {
     if (is_starting || is_stopping || !is_running) ImGui::BeginDisabled();
     if (ImGui::Button("Restart")) {
         controller_.stop_session(session);
-        session.buffer().add_restart_marker("Restarting...");
+        std::string msg = "\r\n[Restarting...]\r\n";
+        session.write_to_terminal(msg.data(), msg.size());
         session.set_state(SessionState::Starting);
     }
     if (is_starting || is_stopping || !is_running) ImGui::EndDisabled();
@@ -210,40 +245,55 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
     float footer_height = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
     
     const auto& theme = get_current_theme();
-    ImVec4 term_bg;
-    term_bg.x = ((theme.terminal_bg >> 0) & 0xFF) / 255.0f;
-    term_bg.y = ((theme.terminal_bg >> 8) & 0xFF) / 255.0f;
-    term_bg.z = ((theme.terminal_bg >> 16) & 0xFF) / 255.0f;
-    term_bg.w = 1.0f;
+    ImVec4 term_bg = u32_to_imvec4(theme.terminal_bg);
     
     ImGui::PushStyleColor(ImGuiCol_ChildBg, term_bg);
     if (ImGui::BeginChild("OutputArea", ImVec2(0, -footer_height), true, ImGuiWindowFlags_HorizontalScrollbar)) {
-        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 1));
+        const auto& terminal = session.terminal();
+        const auto& scrollback = terminal.scrollback();
         
-        const auto& segments = session.buffer().segments();
-        for (const auto& segment : segments) {
-            for (const auto& line : segment.lines) {
-                for (size_t i = 0; i < line.spans.size(); ++i) {
-                    const auto& span = line.spans[i];
+        ImVec2 char_size = ImGui::CalcTextSize("W");
+        float line_height = char_size.y;
+        
+        int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
+        
+        ImGuiListClipper clipper;
+        clipper.Begin(total_lines);
+        
+        while (clipper.Step()) {
+            for (int line_idx = clipper.DisplayStart; line_idx < clipper.DisplayEnd; ++line_idx) {
+                bool is_scrollback = line_idx < static_cast<int>(scrollback.size());
+                
+                if (is_scrollback) {
+                    const auto& line = scrollback[static_cast<size_t>(line_idx)];
+                    render_terminal_line(line.data(), static_cast<int>(line.size()));
+                } else {
+                    int screen_row = line_idx - static_cast<int>(scrollback.size());
+                    std::vector<TerminalCell> row_cells;
+                    row_cells.reserve(static_cast<size_t>(terminal.cols()));
                     
-                    ImVec4 color;
-                    color.x = ((span.color >> 0) & 0xFF) / 255.0f;
-                    color.y = ((span.color >> 8) & 0xFF) / 255.0f;
-                    color.z = ((span.color >> 16) & 0xFF) / 255.0f;
-                    color.w = ((span.color >> 24) & 0xFF) / 255.0f;
-                    
-                    if (i > 0) {
-                        ImGui::SameLine(0.0f, 0.0f);
+                    for (int col = 0; col < terminal.cols(); ++col) {
+                        row_cells.push_back(terminal.get_cell(screen_row, col));
                     }
                     
-                    ImGui::PushStyleColor(ImGuiCol_Text, color);
-                    ImGui::TextUnformatted(span.text.c_str());
-                    ImGui::PopStyleColor();
+                    render_terminal_line(row_cells.data(), static_cast<int>(row_cells.size()));
+                    
+                    auto cursor = terminal.get_cursor();
+                    if (cursor.visible && cursor.row == screen_row) {
+                        ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+                        cursor_pos.x = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMin().x + cursor.col * char_size.x;
+                        cursor_pos.y = ImGui::GetCursorScreenPos().y - line_height;
+                        
+                        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+                        draw_list->AddRectFilled(
+                            cursor_pos,
+                            ImVec2(cursor_pos.x + char_size.x, cursor_pos.y + line_height),
+                            IM_COL32(200, 200, 200, 128)
+                        );
+                    }
                 }
             }
         }
-        
-        ImGui::PopStyleVar();
         
         if (session.scroll_to_bottom()) {
             ImGui::SetScrollHereY(1.0f);
@@ -252,6 +302,47 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
     }
     ImGui::EndChild();
     ImGui::PopStyleColor();
+}
+
+void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count) {
+    if (count <= 0) {
+        ImGui::NewLine();
+        return;
+    }
+    
+    std::string text;
+    text.reserve(static_cast<size_t>(count) * 4);
+    uint32_t current_fg = cells[0].fg;
+    
+    auto flush_text = [&]() {
+        if (!text.empty()) {
+            ImGui::PushStyleColor(ImGuiCol_Text, u32_to_imvec4(current_fg));
+            ImGui::TextUnformatted(text.c_str(), text.c_str() + text.size());
+            ImGui::PopStyleColor();
+            ImGui::SameLine(0.0f, 0.0f);
+            text.clear();
+        }
+    };
+    
+    for (int i = 0; i < count; ++i) {
+        const auto& cell = cells[i];
+        
+        if (cell.width == 0) continue;
+        
+        if (cell.fg != current_fg) {
+            flush_text();
+            current_fg = cell.fg;
+        }
+        
+        uint32_t cp = chars_to_utf8_codepoint(cell.chars);
+        char utf8[5] = {0};
+        int len;
+        utf8_encode(cp, utf8, &len);
+        text.append(utf8, static_cast<size_t>(len));
+    }
+    
+    flush_text();
+    ImGui::NewLine();
 }
 
 void TerminalPanel::render_input_line(TerminalSession& session) {

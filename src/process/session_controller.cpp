@@ -1,5 +1,6 @@
 #include "session_controller.h"
 #include <cstdlib>
+#include <cstring>
 
 namespace agent47 {
 
@@ -54,7 +55,8 @@ void SessionController::start_session(TerminalSession& session) {
         runners_[session_id] = std::move(runner);
     } else {
         session.set_state(SessionState::Idle);
-        session.buffer().append_line("Failed to start process", 0xFF0000FF);
+        const char* err_msg = "\r\n[Failed to start process]\r\n";
+        session.write_to_terminal(err_msg, strlen(err_msg));
         session.request_scroll_to_bottom();
     }
 }

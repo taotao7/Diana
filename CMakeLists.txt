@@ -87,6 +87,9 @@ FetchContent_Declare(
 set(NFD_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(nfd)
 
+# libvterm (local source)
+add_subdirectory(third_party/libvterm)
+
 # =============================================================================
 # ImGui library target
 # =============================================================================
@@ -145,8 +148,7 @@ add_executable(diana
     src/main.cpp
     src/app/app_shell.cpp
     src/app/dockspace.cpp
-    src/terminal/ansi_parser.cpp
-    src/terminal/terminal_buffer.cpp
+    src/terminal/vterminal.cpp
     src/terminal/terminal_session.cpp
     src/terminal/terminal_panel.cpp
     src/process/process_runner.cpp
@@ -176,6 +178,7 @@ target_link_libraries(diana PRIVATE
     nlohmann_json::nlohmann_json
     tomlplusplus::tomlplusplus
     nfd
+    vterm
 )
 
 # =============================================================================

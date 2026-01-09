@@ -1,9 +1,10 @@
 #pragma once
 
-#include "terminal_buffer.h"
+#include "vterminal.h"
 #include "core/types.h"
 #include <string>
 #include <cstdint>
+#include <memory>
 
 namespace agent47 {
 
@@ -35,8 +36,8 @@ public:
     const SessionConfig& config() const { return config_; }
     SessionConfig& config() { return config_; }
     
-    TerminalBuffer& buffer() { return buffer_; }
-    const TerminalBuffer& buffer() const { return buffer_; }
+    VTerminal& terminal() { return *terminal_; }
+    const VTerminal& terminal() const { return *terminal_; }
     
     std::string& input_buffer() { return input_buffer_; }
     const std::string& input_buffer() const { return input_buffer_; }
@@ -44,6 +45,12 @@ public:
     bool scroll_to_bottom() const { return scroll_to_bottom_; }
     void set_scroll_to_bottom(bool v) { scroll_to_bottom_ = v; }
     void request_scroll_to_bottom() { scroll_to_bottom_ = true; }
+    
+    int scroll_offset() const { return scroll_offset_; }
+    void set_scroll_offset(int offset) { scroll_offset_ = offset; }
+    
+    void resize_terminal(int rows, int cols);
+    void write_to_terminal(const char* data, size_t len);
     
     static const char* app_kind_name(AppKind kind);
     static const char* state_name(SessionState state);
@@ -53,9 +60,10 @@ private:
     std::string name_;
     SessionState state_ = SessionState::Idle;
     SessionConfig config_;
-    TerminalBuffer buffer_;
+    std::unique_ptr<VTerminal> terminal_;
     std::string input_buffer_;
     bool scroll_to_bottom_ = true;
+    int scroll_offset_ = 0;
 };
 
 }
