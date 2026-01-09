@@ -2,8 +2,18 @@
 #include <nlohmann/json.hpp>
 #include <fstream>
 #include <cstdlib>
+#include <ctime>
+#include <iomanip>
+#include <sstream>
 
 namespace agent47 {
+
+std::string DailyTokenData::date_key() const {
+    std::ostringstream oss;
+    oss << year << "-" << std::setfill('0') << std::setw(2) << month 
+        << "-" << std::setw(2) << day;
+    return oss.str();
+}
 
 AgentTokenStore::AgentTokenStore() {
     const char* home = std::getenv("HOME");
@@ -319,6 +329,67 @@ std::vector<AgentSession> AgentTokenStore::get_sessions(AgentType type) const {
     std::sort(result.begin(), result.end(), [](const AgentSession& a, const AgentSession& b) {
         return a.last_seen > b.last_seen;
     });
+    
+    return result;
+}
+
+std::vector<DailyTokenData> AgentTokenStore::get_daily_data(AgentType type) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    
+    std::map<std::string, DailyTokenData> daily_map;
+    
+    auto now = std::chrono::system_clock::now();
+    auto year_ago = now - std::chrono::hours(24 * 365);
+    
+    for (int i = 0; i < 365; ++i) {
+        auto day_point = now - std::chrono::hours(24 * (364 - i));
+        auto time_t_val = std::chrono::system_clock::to_time_t(day_point);
+        std::tm* tm = std::localtime(&time_t_val);
+        
+        DailyTokenData data;
+        data.year = tm->tm_year + 1900;
+        data.month = tm->tm_mon + 1;
+        data.day = tm->tm_mday;
+        data.weekday = tm->tm_wday;
+        
+        daily_map[data.date_key()] = data;
+    }
+    
+    for (const auto& [id, session] : sessions_) {
+        bool match = false;
+        for (const auto& file : files_) {
+            if (file.session_id == id && file.agent_type == type) {
+                match = true;
+                break;
+            }
+        }
+        
+        if (!match && type == AgentType::ClaudeCode) {
+            match = true;
+        }
+        
+        if (match && session.first_seen > year_ago) {
+            auto time_t_val = std::chrono::system_clock::to_time_t(session.first_seen);
+            std::tm* tm = std::localtime(&time_t_val);
+            
+            std::ostringstream oss;
+            oss << (tm->tm_year + 1900) << "-" << std::setfill('0') << std::setw(2) << (tm->tm_mon + 1)
+                << "-" << std::setw(2) << tm->tm_mday;
+            std::string key = oss.str();
+            
+            if (daily_map.count(key)) {
+                daily_map[key].tokens += session.tokens.total();
+                daily_map[key].cost += session.tokens.cost_usd;
+                daily_map[key].session_count++;
+            }
+        }
+    }
+    
+    std::vector<DailyTokenData> result;
+    result.reserve(daily_map.size());
+    for (auto& [key, data] : daily_map) {
+        result.push_back(std::move(data));
+    }
     
     return result;
 }

@@ -1,10 +1,7 @@
 #include "ui/agent_token_panel.h"
 #include "imgui.h"
-#include "implot.h"
 #include <algorithm>
-#include <ctime>
-#include <iomanip>
-#include <sstream>
+#include <map>
 
 namespace agent47 {
 
@@ -15,27 +12,11 @@ AgentTokenPanel::AgentTokenPanel()
 
 void AgentTokenPanel::update() {
     store_->poll();
-    
-    monthly_data_.clear();
-    auto sessions = store_->get_sessions(selected_agent_);
-    
-    for (const auto& session : sessions) {
-        auto time_t_val = std::chrono::system_clock::to_time_t(session.first_seen);
-        std::tm* tm = std::localtime(&time_t_val);
-        
-        std::ostringstream oss;
-        oss << std::put_time(tm, "%Y-%m");
-        std::string month_key = oss.str();
-        
-        auto& data = monthly_data_[month_key];
-        data.tokens += session.tokens.total();
-        data.cost += session.tokens.cost_usd;
-        data.session_count++;
-    }
+    daily_data_ = store_->get_daily_data(selected_agent_);
 }
 
 void AgentTokenPanel::render() {
-    ImGui::SetNextWindowSizeConstraints(ImVec2(300, 400), ImVec2(FLT_MAX, FLT_MAX));
+    ImGui::SetNextWindowSizeConstraints(ImVec2(400, 500), ImVec2(FLT_MAX, FLT_MAX));
     ImGui::Begin("Agent Token Stats");
     
     update();
@@ -46,7 +27,7 @@ void AgentTokenPanel::render() {
     ImGui::Separator();
     render_token_breakdown();
     ImGui::Separator();
-    render_monthly_chart();
+    render_heatmap();
     ImGui::Separator();
     render_session_list();
     
@@ -70,7 +51,7 @@ void AgentTokenPanel::render() {
         
         if (ImGui::Button("Yes, Clear", ImVec2(120, 0))) {
             store_->clear();
-            monthly_data_.clear();
+            daily_data_.clear();
             show_clear_confirm_ = false;
             ImGui::CloseCurrentPopup();
         }
@@ -146,34 +127,163 @@ void AgentTokenPanel::render_token_breakdown() {
     }
 }
 
-void AgentTokenPanel::render_monthly_chart() {
-    if (monthly_data_.empty()) {
-        ImGui::TextDisabled("No monthly data available");
+ImU32 AgentTokenPanel::get_heatmap_color(uint64_t tokens, uint64_t max_tokens) {
+    if (tokens == 0 || max_tokens == 0) {
+        return IM_COL32(22, 27, 34, 255);
+    }
+    
+    float ratio = static_cast<float>(tokens) / static_cast<float>(max_tokens);
+    
+    if (ratio < 0.25f) {
+        return IM_COL32(14, 68, 41, 255);
+    } else if (ratio < 0.5f) {
+        return IM_COL32(0, 109, 50, 255);
+    } else if (ratio < 0.75f) {
+        return IM_COL32(38, 166, 65, 255);
+    } else {
+        return IM_COL32(57, 211, 83, 255);
+    }
+}
+
+void AgentTokenPanel::render_heatmap() {
+    if (daily_data_.empty()) {
+        ImGui::TextDisabled("No activity data");
         return;
     }
     
-    std::vector<std::string> months;
-    std::vector<double> tokens;
-    
-    for (const auto& [month, data] : monthly_data_) {
-        months.push_back(month);
-        tokens.push_back(static_cast<double>(data.tokens) / 1000.0);
+    uint64_t max_tokens = 0;
+    for (const auto& d : daily_data_) {
+        max_tokens = std::max(max_tokens, d.tokens);
     }
     
-    if (ImPlot::BeginPlot("Monthly Token Usage (K)", ImVec2(-1, 120))) {
-        ImPlot::SetupAxes("Month", "Tokens (K)");
+    const float cell_size = 10.0f;
+    const float cell_gap = 2.0f;
+    const float label_width = 30.0f;
+    const float month_label_height = 16.0f;
+    
+    ImGui::Text("Token Activity (last 365 days)");
+    
+    float available_width = ImGui::GetContentRegionAvail().x;
+    int weeks_to_show = static_cast<int>((available_width - label_width) / (cell_size + cell_gap));
+    weeks_to_show = std::min(weeks_to_show, 53);
+    
+    float total_height = month_label_height + 7 * (cell_size + cell_gap);
+    
+    ImGui::BeginChild("HeatmapRegion", ImVec2(-1, total_height + 30), false);
+    
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    ImVec2 canvas_pos = ImGui::GetCursorScreenPos();
+    
+    const char* weekday_labels[] = { "", "Mon", "", "Wed", "", "Fri", "" };
+    for (int row = 0; row < 7; ++row) {
+        float y = canvas_pos.y + month_label_height + row * (cell_size + cell_gap);
+        ImGui::SetCursorScreenPos(ImVec2(canvas_pos.x, y));
+        ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "%s", weekday_labels[row]);
+    }
+    
+    int start_idx = static_cast<int>(daily_data_.size()) - weeks_to_show * 7;
+    if (start_idx < 0) start_idx = 0;
+    
+    int first_weekday = 0;
+    if (start_idx < static_cast<int>(daily_data_.size())) {
+        first_weekday = daily_data_[start_idx].weekday;
+    }
+    
+    std::map<std::string, int> month_starts;
+    
+    int col = 0;
+    int row = first_weekday;
+    
+    for (size_t i = start_idx; i < daily_data_.size(); ++i) {
+        const auto& data = daily_data_[i];
         
-        std::vector<const char*> month_labels;
-        for (const auto& m : months) {
-            month_labels.push_back(m.c_str());
+        if (data.day == 1 || (i == static_cast<size_t>(start_idx) && data.day <= 7)) {
+            const char* month_names[] = { "", "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                                          "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+            std::string month_label = month_names[data.month];
+            month_starts[std::to_string(col)] = data.month;
         }
         
-        ImPlot::SetupAxisTicks(ImAxis_X1, 0, static_cast<double>(months.size() - 1), 
-                               static_cast<int>(months.size()), month_labels.data());
+        float x = canvas_pos.x + label_width + col * (cell_size + cell_gap);
+        float y = canvas_pos.y + month_label_height + row * (cell_size + cell_gap);
         
-        ImPlot::PlotBars("Tokens", tokens.data(), static_cast<int>(tokens.size()));
-        ImPlot::EndPlot();
+        ImU32 color = get_heatmap_color(data.tokens, max_tokens);
+        draw_list->AddRectFilled(ImVec2(x, y), ImVec2(x + cell_size, y + cell_size), color, 2.0f);
+        
+        ImVec2 mouse_pos = ImGui::GetMousePos();
+        if (mouse_pos.x >= x && mouse_pos.x <= x + cell_size &&
+            mouse_pos.y >= y && mouse_pos.y <= y + cell_size) {
+            ImGui::BeginTooltip();
+            ImGui::Text("%04d-%02d-%02d", data.year, data.month, data.day);
+            if (data.tokens > 0) {
+                if (data.tokens >= 1000000) {
+                    ImGui::Text("Tokens: %.2fM", static_cast<double>(data.tokens) / 1000000.0);
+                } else if (data.tokens >= 1000) {
+                    ImGui::Text("Tokens: %.1fK", static_cast<double>(data.tokens) / 1000.0);
+                } else {
+                    ImGui::Text("Tokens: %llu", static_cast<unsigned long long>(data.tokens));
+                }
+                ImGui::Text("Sessions: %zu", data.session_count);
+            } else {
+                ImGui::TextDisabled("No activity");
+            }
+            ImGui::EndTooltip();
+        }
+        
+        row++;
+        if (row >= 7) {
+            row = 0;
+            col++;
+        }
     }
+    
+    const char* month_names[] = { "", "Jan", "Feb", "Mar", "Apr", "May", "Jun", 
+                                  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+    int last_drawn_month = 0;
+    col = 0;
+    row = first_weekday;
+    for (size_t i = start_idx; i < daily_data_.size(); ++i) {
+        const auto& data = daily_data_[i];
+        
+        if (data.day <= 7 && data.month != last_drawn_month) {
+            float x = canvas_pos.x + label_width + col * (cell_size + cell_gap);
+            draw_list->AddText(ImVec2(x, canvas_pos.y), IM_COL32(150, 150, 150, 255), month_names[data.month]);
+            last_drawn_month = data.month;
+        }
+        
+        row++;
+        if (row >= 7) {
+            row = 0;
+            col++;
+        }
+    }
+    
+    float legend_y = canvas_pos.y + month_label_height + 7 * (cell_size + cell_gap) + 8;
+    float legend_x = canvas_pos.x + label_width;
+    
+    draw_list->AddText(ImVec2(legend_x, legend_y), IM_COL32(150, 150, 150, 255), "Less");
+    legend_x += 30;
+    
+    ImU32 legend_colors[] = {
+        IM_COL32(22, 27, 34, 255),
+        IM_COL32(14, 68, 41, 255),
+        IM_COL32(0, 109, 50, 255),
+        IM_COL32(38, 166, 65, 255),
+        IM_COL32(57, 211, 83, 255)
+    };
+    
+    for (int i = 0; i < 5; ++i) {
+        draw_list->AddRectFilled(
+            ImVec2(legend_x + i * (cell_size + 2), legend_y),
+            ImVec2(legend_x + i * (cell_size + 2) + cell_size, legend_y + cell_size),
+            legend_colors[i], 2.0f
+        );
+    }
+    
+    legend_x += 5 * (cell_size + 2) + 4;
+    draw_list->AddText(ImVec2(legend_x, legend_y), IM_COL32(150, 150, 150, 255), "More");
+    
+    ImGui::EndChild();
 }
 
 std::string AgentTokenPanel::truncate_session_id(const std::string& id, size_t max_len) {

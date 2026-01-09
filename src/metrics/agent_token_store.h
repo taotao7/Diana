@@ -53,6 +53,18 @@ struct AgentTypeStats {
     std::chrono::system_clock::time_point last_activity;
 };
 
+struct DailyTokenData {
+    int year = 0;
+    int month = 0;
+    int day = 0;
+    int weekday = 0;
+    uint64_t tokens = 0;
+    double cost = 0.0;
+    size_t session_count = 0;
+    
+    std::string date_key() const;
+};
+
 // Store for aggregating token usage per agent type
 class AgentTokenStore {
 public:
@@ -70,6 +82,9 @@ public:
     
     // Get session list for a specific agent type
     std::vector<AgentSession> get_sessions(AgentType type) const;
+    
+    // Get daily token data for heatmap (last 365 days)
+    std::vector<DailyTokenData> get_daily_data(AgentType type) const;
     
     // Clear all data
     void clear();
