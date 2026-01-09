@@ -1,5 +1,7 @@
 # Diana
 
+<img width="2752" height="1536" alt="Gemini_Generated_Image_8fewwy8fewwy8few" src="https://github.com/user-attachments/assets/c15fc35f-d90d-45c5-ad33-d17954a7f951" />
+
 **Your Agent's Best Handler.**
 
 Diana is the ultimate mission control for your AI agents. Just as every Agent 47 needs a Diana, every LLM needs a handler to manage directives (configuration), monitor results (outputs), and keep the budget in check (token calculation).
