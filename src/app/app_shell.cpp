@@ -6,7 +6,7 @@
 namespace agent47 {
 
 void AppShell::init() {
-    profile_store_ = std::make_unique<ProfileStore>();
+    profile_store_ = std::make_unique<ClaudeProfileStore>();
     profile_store_->load();
     profile_store_->detect_active_profile();
     

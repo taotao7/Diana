@@ -8,9 +8,9 @@
 
 namespace agent47 {
 
-class ProfileStore {
+class ClaudeProfileStore {
 public:
-    ProfileStore();
+    ClaudeProfileStore();
     
     bool load();
     bool save();

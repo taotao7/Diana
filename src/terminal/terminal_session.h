@@ -1,16 +1,11 @@
 #pragma once
 
 #include "terminal_buffer.h"
+#include "core/types.h"
 #include <string>
 #include <cstdint>
 
 namespace agent47 {
-
-enum class AppKind {
-    ClaudeCode,
-    Codex,
-    OpenCode
-};
 
 enum class SessionState {
     Idle,

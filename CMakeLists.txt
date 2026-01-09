@@ -157,7 +157,7 @@ add_executable(diana
     src/adapters/config_manager.cpp
     src/adapters/config_exporter.cpp
     src/adapters/claude_code_config.cpp
-    src/adapters/profile_store.cpp
+    src/adapters/claude_profile_store.cpp
     src/ui/metrics_panel.cpp
     src/ui/claude_code_panel.cpp
     src/metrics/metrics_store.cpp

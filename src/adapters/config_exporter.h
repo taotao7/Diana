@@ -1,7 +1,7 @@
 #pragma once
 
 #include "adapters/app_adapter.h"
-#include "terminal/terminal_session.h"
+#include "core/types.h"
 #include <string>
 #include <vector>
 #include <optional>

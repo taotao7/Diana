@@ -1,4 +1,4 @@
-#include "profile_store.h"
+#include "claude_profile_store.h"
 #include <fstream>
 #include <cstdlib>
 #include <chrono>
@@ -6,7 +6,7 @@
 
 namespace agent47 {
 
-ProfileStore::ProfileStore() {
+ClaudeProfileStore::ClaudeProfileStore() {
     const char* home = std::getenv("HOME");
     if (home) {
         store_path_ = std::string(home) + "/.claude/diana_profiles.json";
@@ -14,21 +14,21 @@ ProfileStore::ProfileStore() {
     }
 }
 
-std::string ProfileStore::store_path() const {
+std::string ClaudeProfileStore::store_path() const {
     return store_path_;
 }
 
-std::string ProfileStore::settings_path() const {
+std::string ClaudeProfileStore::settings_path() const {
     return settings_path_;
 }
 
-int64_t ProfileStore::current_timestamp() const {
+int64_t ClaudeProfileStore::current_timestamp() const {
     auto now = std::chrono::system_clock::now();
     return std::chrono::duration_cast<std::chrono::seconds>(
         now.time_since_epoch()).count();
 }
 
-bool ProfileStore::load() {
+bool ClaudeProfileStore::load() {
     if (store_path_.empty()) return false;
     
     std::ifstream file(store_path_);
@@ -55,7 +55,7 @@ bool ProfileStore::load() {
     }
 }
 
-bool ProfileStore::save() {
+bool ClaudeProfileStore::save() {
     if (store_path_.empty()) return false;
     
     nlohmann::json j;
@@ -88,14 +88,14 @@ bool ProfileStore::save() {
     return true;
 }
 
-std::optional<ClaudeCodeProfile> ProfileStore::get_profile(const std::string& name) const {
+std::optional<ClaudeCodeProfile> ClaudeProfileStore::get_profile(const std::string& name) const {
     for (const auto& p : profiles_) {
         if (p.name == name) return p;
     }
     return std::nullopt;
 }
 
-bool ProfileStore::add_profile(const ClaudeCodeProfile& profile) {
+bool ClaudeProfileStore::add_profile(const ClaudeCodeProfile& profile) {
     for (const auto& p : profiles_) {
         if (p.name == profile.name) return false;
     }
@@ -107,7 +107,7 @@ bool ProfileStore::add_profile(const ClaudeCodeProfile& profile) {
     return save();
 }
 
-bool ProfileStore::update_profile(const std::string& name, const ClaudeCodeProfile& profile) {
+bool ClaudeProfileStore::update_profile(const std::string& name, const ClaudeCodeProfile& profile) {
     for (auto& p : profiles_) {
         if (p.name == name) {
             p.config = profile.config;
@@ -119,7 +119,7 @@ bool ProfileStore::update_profile(const std::string& name, const ClaudeCodeProfi
     return false;
 }
 
-bool ProfileStore::delete_profile(const std::string& name) {
+bool ClaudeProfileStore::delete_profile(const std::string& name) {
     auto it = std::find_if(profiles_.begin(), profiles_.end(),
         [&name](const auto& p) { return p.name == name; });
     
@@ -133,7 +133,7 @@ bool ProfileStore::delete_profile(const std::string& name) {
     return false;
 }
 
-bool ProfileStore::rename_profile(const std::string& old_name, const std::string& new_name) {
+bool ClaudeProfileStore::rename_profile(const std::string& old_name, const std::string& new_name) {
     for (const auto& p : profiles_) {
         if (p.name == new_name) return false;
     }
@@ -151,7 +151,7 @@ bool ProfileStore::rename_profile(const std::string& old_name, const std::string
     return false;
 }
 
-bool ProfileStore::set_active_profile(const std::string& name) {
+bool ClaudeProfileStore::set_active_profile(const std::string& name) {
     if (name.empty()) {
         active_profile_.clear();
         return save();
@@ -167,7 +167,7 @@ bool ProfileStore::set_active_profile(const std::string& name) {
     return false;
 }
 
-ClaudeCodeConfig ProfileStore::read_current_config() {
+ClaudeCodeConfig ClaudeProfileStore::read_current_config() {
     if (settings_path_.empty()) return ClaudeCodeConfig{};
     
     std::ifstream file(settings_path_);
@@ -181,7 +181,7 @@ ClaudeCodeConfig ProfileStore::read_current_config() {
     }
 }
 
-bool ProfileStore::write_current_config(const ClaudeCodeConfig& config) {
+bool ClaudeProfileStore::write_current_config(const ClaudeCodeConfig& config) {
     if (settings_path_.empty()) return false;
     
     nlohmann::json j = config.to_json();
@@ -206,7 +206,7 @@ bool ProfileStore::write_current_config(const ClaudeCodeConfig& config) {
     return true;
 }
 
-void ProfileStore::detect_active_profile() {
+void ClaudeProfileStore::detect_active_profile() {
     ClaudeCodeConfig current = read_current_config();
     
     for (const auto& p : profiles_) {
@@ -225,7 +225,7 @@ void ProfileStore::detect_active_profile() {
     }
 }
 
-bool ProfileStore::configs_match(const ClaudeCodeConfig& a, const ClaudeCodeConfig& b) const {
+bool ClaudeProfileStore::configs_match(const ClaudeCodeConfig& a, const ClaudeCodeConfig& b) const {
     return a.model == b.model &&
            a.env == b.env &&
            a.permissions.default_mode == b.permissions.default_mode &&

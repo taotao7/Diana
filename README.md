@@ -89,37 +89,37 @@ make -j8
 
 ```
 src/
-├── main.cpp                    # Entry point, GLFW/OpenGL setup
+├── main.cpp                         # Entry point, GLFW/OpenGL setup
 ├── app/
-│   ├── app_shell.h/cpp         # Main application orchestrator
-│   └── dockspace.h/cpp         # ImGui docking layout
+│   ├── app_shell.h/cpp              # Main application orchestrator
+│   └── dockspace.h/cpp              # ImGui docking layout
+├── core/
+│   ├── types.h                      # Shared enums (AppKind)
+│   ├── event_queue.h                # Thread-safe event queue
+│   └── session_events.h             # Event type definitions
 ├── terminal/
-│   ├── terminal_buffer.h/cpp   # Ring buffer for terminal output
-│   ├── terminal_session.h/cpp  # Per-tab session state
-│   ├── terminal_panel.h/cpp    # Multi-tab terminal UI
-│   └── ansi_parser.h/cpp       # ANSI escape sequence handling
+│   ├── terminal_buffer.h/cpp        # Ring buffer for terminal output
+│   ├── terminal_session.h/cpp       # Per-tab session state
+│   ├── terminal_panel.h/cpp         # Multi-tab terminal UI
+│   └── ansi_parser.h/cpp            # ANSI escape sequence handling
 ├── process/
-│   ├── process_runner.h/cpp    # PTY/fork process spawning (POSIX)
-│   └── session_controller.h/cpp # Agent lifecycle management
+│   ├── process_runner.h/cpp         # PTY/fork process spawning (POSIX)
+│   └── session_controller.h/cpp     # Agent lifecycle management
 ├── adapters/
-│   ├── app_adapter.h           # Abstract adapter interface
-│   ├── claude_code_adapter.h/cpp
-│   ├── claude_code_config.h/cpp # Full Claude Code settings struct
-│   ├── profile_store.h/cpp     # Multi-profile CRUD + active detection
-│   ├── codex_adapter.h/cpp
-│   ├── opencode_adapter.h/cpp
-│   ├── config_manager.h/cpp    # Unified config access
-│   └── config_exporter.h/cpp   # JSON export/import
+│   ├── app_adapter.h                # Abstract adapter interface
+│   ├── claude_code_adapter.h/cpp    # Claude Code settings.json adapter
+│   ├── claude_code_config.h/cpp     # Full Claude Code config struct
+│   ├── claude_profile_store.h/cpp   # Claude Code multi-profile CRUD
+│   ├── codex_adapter.h/cpp          # Codex config.toml adapter
+│   ├── opencode_adapter.h/cpp       # OpenCode config adapter
+│   ├── config_manager.h/cpp         # Unified config access
+│   └── config_exporter.h/cpp        # JSON export/import
 ├── metrics/
-│   ├── metrics_store.h/cpp     # Token metrics aggregation
+│   ├── metrics_store.h/cpp          # Token metrics aggregation
 │   └── claude_usage_collector.h/cpp # JSONL file watcher
-├── ui/
-│   ├── claude_code_panel.h/cpp # Profile list + config editor UI
-│   ├── metrics_panel.h/cpp     # Token usage charts
-│   └── profiles_panel.h/cpp    # (legacy, to be removed)
-└── core/
-    ├── event_queue.h           # Thread-safe event queue
-    └── session_events.h        # Event type definitions
+└── ui/
+    ├── claude_code_panel.h/cpp      # Profile list + config editor UI
+    └── metrics_panel.h/cpp          # Token usage charts
 ```
 
 ### Data Flow

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "adapters/profile_store.h"
+#include "adapters/claude_profile_store.h"
 #include <imgui.h>
 #include <array>
 
@@ -12,7 +12,7 @@ public:
     
     void render();
     
-    void set_profile_store(ProfileStore* store) { profile_store_ = store; }
+    void set_profile_store(ClaudeProfileStore* store) { profile_store_ = store; }
     
     const std::string& selected_profile_for_launch() const { return editing_profile_name_; }
 
@@ -34,7 +34,7 @@ private:
     
     void render_string_list(const char* label, std::vector<std::string>& list);
     
-    ProfileStore* profile_store_ = nullptr;
+    ClaudeProfileStore* profile_store_ = nullptr;
     
     std::string editing_profile_name_;
     std::string editing_profile_new_name_;

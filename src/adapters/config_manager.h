@@ -4,7 +4,7 @@
 #include "claude_code_adapter.h"
 #include "codex_adapter.h"
 #include "opencode_adapter.h"
-#include "terminal/terminal_session.h"
+#include "core/types.h"
 #include <memory>
 #include <string>
 
