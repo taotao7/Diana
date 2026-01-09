@@ -313,22 +313,48 @@ void TerminalPanel::render_banner() {
     ImVec4 accent = u32_to_imvec4(theme.accent);
     ImVec4 dim = u32_to_imvec4(theme.foreground_dim);
     
-    ImGui::NewLine();
-    ImGui::NewLine();
+    const char* banner_lines[] = {
+        "DDDDDDD    IIII    AAA    NN    NN    AAA   ",
+        "DD    DD    II    AA AA   NNN   NN   AA AA  ",
+        "DD    DD    II   AA   AA  NNNN  NN  AA   AA ",
+        "DD    DD    II  AAAAAAAAA NN NN NN AAAAAAAAA",
+        "DD    DD    II  AA     AA NN  NNNN AA     AA",
+        "DDDDDDD    IIII AA     AA NN   NNN AA     AA"
+    };
+    const char* tagline = "Your Agent's Best Handler";
+    const char* hint = "Select an agent and click Start to begin.";
+    
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+    float line_height = ImGui::GetTextLineHeightWithSpacing();
+    float total_height = line_height * 10;
+    
+    float banner_width = ImGui::CalcTextSize(banner_lines[0]).x;
+    float tagline_width = ImGui::CalcTextSize(tagline).x;
+    float hint_width = ImGui::CalcTextSize(hint).x;
+    
+    float start_y = (avail.y - total_height) * 0.5f;
+    if (start_y > 0) {
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + start_y);
+    }
+    
+    float banner_x = (avail.x - banner_width) * 0.5f;
+    float tagline_x = (avail.x - tagline_width) * 0.5f;
+    float hint_x = (avail.x - hint_width) * 0.5f;
+    
     ImGui::PushStyleColor(ImGuiCol_Text, accent);
-    ImGui::TextUnformatted("  DDDDDDD    IIII    AAA    NN    NN    AAA   ");
-    ImGui::TextUnformatted("  DD    DD    II    AA AA   NNN   NN   AA AA  ");
-    ImGui::TextUnformatted("  DD    DD    II   AA   AA  NNNN  NN  AA   AA ");
-    ImGui::TextUnformatted("  DD    DD    II  AAAAAAAAA NN NN NN AAAAAAAAA");
-    ImGui::TextUnformatted("  DD    DD    II  AA     AA NN  NNNN AA     AA");
-    ImGui::TextUnformatted("  DDDDDDD    IIII AA     AA NN   NNN AA     AA");
+    for (const char* line : banner_lines) {
+        ImGui::SetCursorPosX(banner_x);
+        ImGui::TextUnformatted(line);
+    }
     ImGui::PopStyleColor();
     
     ImGui::NewLine();
     ImGui::PushStyleColor(ImGuiCol_Text, dim);
-    ImGui::TextUnformatted("           Your Agent's Best Handler");
+    ImGui::SetCursorPosX(tagline_x);
+    ImGui::TextUnformatted(tagline);
     ImGui::NewLine();
-    ImGui::TextUnformatted("      Select an agent and click Start to begin.");
+    ImGui::SetCursorPosX(hint_x);
+    ImGui::TextUnformatted(hint);
     ImGui::PopStyleColor();
 }
 
