@@ -1,0 +1,26 @@
+# Build
+build/
+cmake-build-*/
+
+# IDE / Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# LSP / clangd
+.cache/
+compile_commands.json
+
+# ImGui state
+imgui.ini
+
+# macOS
+.DS_Store
+
+# Compiled
+*.o
+*.a
+*.dylib
+*.so

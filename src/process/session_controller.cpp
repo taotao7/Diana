@@ -1,0 +1,94 @@
+#include "session_controller.h"
+#include <cstdlib>
+
+namespace agent47 {
+
+namespace {
+
+const char* get_executable_for_app(AppKind app) {
+    switch (app) {
+        case AppKind::ClaudeCode: return "claude";
+        case AppKind::Codex:      return "codex";
+        case AppKind::OpenCode:   return "opencode";
+    }
+    return "claude";
+}
+
+std::string get_working_dir() {
+    const char* home = std::getenv("HOME");
+    return home ? home : "/tmp";
+}
+
+}
+
+SessionController::SessionController() = default;
+
+SessionController::~SessionController() {
+    for (auto& [id, runner] : runners_) {
+        if (runner && runner->is_running()) {
+            runner->stop();
+        }
+    }
+}
+
+void SessionController::start_session(TerminalSession& session) {
+    if (runners_.count(session.id()) && runners_[session.id()]->is_running()) {
+        return;
+    }
+    
+    auto runner = std::make_unique<ProcessRunner>();
+    uint32_t session_id = session.id();
+    
+    runner->set_output_callback([this, session_id](const std::string& data, bool is_stderr) {
+        event_queue_.push(OutputEvent{session_id, data, is_stderr});
+    });
+    
+    runner->set_exit_callback([this, session_id](int exit_code) {
+        event_queue_.push(ExitEvent{session_id, exit_code});
+    });
+    
+    ProcessConfig config = build_config(session);
+    
+    if (runner->start(config)) {
+        session.set_state(SessionState::Running);
+        runners_[session_id] = std::move(runner);
+    } else {
+        session.set_state(SessionState::Idle);
+        session.buffer().append_line("Failed to start process", 0xFF0000FF);
+        session.request_scroll_to_bottom();
+    }
+}
+
+void SessionController::stop_session(TerminalSession& session) {
+    auto it = runners_.find(session.id());
+    if (it != runners_.end() && it->second && it->second->is_running()) {
+        session.set_state(SessionState::Stopping);
+        it->second->stop();
+    }
+}
+
+void SessionController::send_input(TerminalSession& session, const std::string& input) {
+    auto it = runners_.find(session.id());
+    if (it != runners_.end() && it->second && it->second->is_running()) {
+        it->second->write_stdin(input + "\n");
+    }
+}
+
+void SessionController::process_events() {
+    while (auto event_opt = event_queue_.try_pop()) {
+        std::visit([](auto&& evt) {
+            (void)evt;
+        }, *event_opt);
+    }
+}
+
+ProcessConfig SessionController::build_config(const TerminalSession& session) {
+    ProcessConfig config;
+    config.executable = get_executable_for_app(session.config().app);
+    config.working_dir = session.config().working_dir.empty() 
+        ? get_working_dir() 
+        : session.config().working_dir;
+    return config;
+}
+
+}
