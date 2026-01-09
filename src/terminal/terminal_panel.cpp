@@ -62,6 +62,11 @@ TerminalPanel::TerminalPanel() {
 void TerminalPanel::render() {
     process_events();
     
+    for (uint32_t id : sessions_to_close_) {
+        close_session(id);
+    }
+    sessions_to_close_.clear();
+    
     ImGui::SetNextWindowSizeConstraints(ImVec2(400, 300), ImVec2(FLT_MAX, FLT_MAX));
     if (ImGui::Begin("Terminal")) {
         if (sessions_.empty()) {
@@ -146,7 +151,9 @@ void TerminalPanel::process_events() {
             if constexpr (std::is_same_v<T, OutputEvent>) {
                 if (auto* session = find_session(evt.session_id)) {
                     session->write_to_terminal(evt.data.data(), evt.data.size());
-                    session->request_scroll_to_bottom();
+                    if (!session->user_scrolled_up()) {
+                        session->request_scroll_to_bottom();
+                    }
                 }
             }
             else if constexpr (std::is_same_v<T, ExitEvent>) {
@@ -155,6 +162,7 @@ void TerminalPanel::process_events() {
                     std::string msg = "\r\n[Process exited with code " + std::to_string(evt.exit_code) + "]\r\n";
                     session->write_to_terminal(msg.data(), msg.size());
                     session->request_scroll_to_bottom();
+                    sessions_to_close_.push_back(evt.session_id);
                 }
             }
         }, *event_opt);
@@ -333,6 +341,18 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                     }
                 }
             }
+        }
+        
+        float scroll_y = ImGui::GetScrollY();
+        float scroll_max_y = ImGui::GetScrollMaxY();
+        bool at_bottom = (scroll_max_y <= 0.0f) || (scroll_y >= scroll_max_y - 1.0f);
+        
+        if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
+            session.set_user_scrolled_up(!at_bottom);
+        }
+        
+        if (at_bottom) {
+            session.set_user_scrolled_up(false);
         }
         
         if (session.scroll_to_bottom()) {

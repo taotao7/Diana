@@ -31,6 +31,7 @@ private:
     void handle_start_stop(TerminalSession& session);
     
     std::vector<std::unique_ptr<TerminalSession>> sessions_;
+    std::vector<uint32_t> sessions_to_close_;
     uint32_t active_session_idx_ = 0;
     uint32_t next_session_id_ = 1;
     

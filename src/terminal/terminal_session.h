@@ -46,6 +46,9 @@ public:
     void set_scroll_to_bottom(bool v) { scroll_to_bottom_ = v; }
     void request_scroll_to_bottom() { scroll_to_bottom_ = true; }
     
+    bool user_scrolled_up() const { return user_scrolled_up_; }
+    void set_user_scrolled_up(bool v) { user_scrolled_up_ = v; }
+    
     int scroll_offset() const { return scroll_offset_; }
     void set_scroll_offset(int offset) { scroll_offset_ = offset; }
     
@@ -63,6 +66,7 @@ private:
     std::unique_ptr<VTerminal> terminal_;
     std::string input_buffer_;
     bool scroll_to_bottom_ = true;
+    bool user_scrolled_up_ = false;
     int scroll_offset_ = 0;
 };
 
