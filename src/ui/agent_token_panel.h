@@ -1,6 +1,7 @@
 #pragma once
 
 #include "metrics/agent_token_store.h"
+#include "ui/theme.h"
 #include <imgui.h>
 #include <memory>
 #include <array>

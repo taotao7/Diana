@@ -119,8 +119,14 @@ void AgentTokenPanel::render_token_breakdown() {
         ImGui::TableNextColumn(); ImGui::Text("%llu", static_cast<unsigned long long>(stats.total_tokens.cache_read_tokens));
         
         ImGui::TableNextRow();
-        ImGui::TableNextColumn(); ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "Total");
-        ImGui::TableNextColumn(); ImGui::TextColored(ImVec4(0.4f, 1.0f, 0.4f, 1.0f), "%llu", 
+        const auto& theme = get_current_theme();
+        float accent_r = (theme.accent & 0xFF) / 255.0f;
+        float accent_g = ((theme.accent >> 8) & 0xFF) / 255.0f;
+        float accent_b = ((theme.accent >> 16) & 0xFF) / 255.0f;
+        ImVec4 accent_color(accent_r, accent_g, accent_b, 1.0f);
+        
+        ImGui::TableNextColumn(); ImGui::TextColored(accent_color, "Total");
+        ImGui::TableNextColumn(); ImGui::TextColored(accent_color, "%llu", 
             static_cast<unsigned long long>(stats.total_tokens.total()));
         
         ImGui::EndTable();
@@ -128,21 +134,38 @@ void AgentTokenPanel::render_token_breakdown() {
 }
 
 ImU32 AgentTokenPanel::get_heatmap_color(uint64_t tokens, uint64_t max_tokens) {
+    const auto& theme = get_current_theme();
+    
     if (tokens == 0 || max_tokens == 0) {
-        return IM_COL32(22, 27, 34, 255);
+        return theme.background_dark;
     }
     
     float ratio = static_cast<float>(tokens) / static_cast<float>(max_tokens);
     
+    uint8_t accent_r = theme.accent & 0xFF;
+    uint8_t accent_g = (theme.accent >> 8) & 0xFF;
+    uint8_t accent_b = (theme.accent >> 16) & 0xFF;
+    
+    uint8_t bg_r = theme.background_dark & 0xFF;
+    uint8_t bg_g = (theme.background_dark >> 8) & 0xFF;
+    uint8_t bg_b = (theme.background_dark >> 16) & 0xFF;
+    
+    float level;
     if (ratio < 0.25f) {
-        return IM_COL32(14, 68, 41, 255);
+        level = 0.25f;
     } else if (ratio < 0.5f) {
-        return IM_COL32(0, 109, 50, 255);
+        level = 0.5f;
     } else if (ratio < 0.75f) {
-        return IM_COL32(38, 166, 65, 255);
+        level = 0.75f;
     } else {
-        return IM_COL32(57, 211, 83, 255);
+        level = 1.0f;
     }
+    
+    uint8_t r = static_cast<uint8_t>(bg_r + (accent_r - bg_r) * level);
+    uint8_t g = static_cast<uint8_t>(bg_g + (accent_g - bg_g) * level);
+    uint8_t b = static_cast<uint8_t>(bg_b + (accent_b - bg_b) * level);
+    
+    return IM_COL32(r, g, b, 255);
 }
 
 void AgentTokenPanel::render_heatmap() {
@@ -242,12 +265,16 @@ void AgentTokenPanel::render_heatmap() {
     int last_drawn_month = 0;
     col = 0;
     row = first_weekday;
+    
+    const auto& theme = get_current_theme();
+    ImU32 label_color = theme.foreground_dim;
+    
     for (size_t i = start_idx; i < daily_data_.size(); ++i) {
         const auto& data = daily_data_[i];
         
         if (data.day <= 7 && data.month != last_drawn_month) {
             float x = canvas_pos.x + label_width + col * (cell_size + cell_gap);
-            draw_list->AddText(ImVec2(x, canvas_pos.y), IM_COL32(150, 150, 150, 255), month_names[data.month]);
+            draw_list->AddText(ImVec2(x, canvas_pos.y), label_color, month_names[data.month]);
             last_drawn_month = data.month;
         }
         
@@ -261,27 +288,32 @@ void AgentTokenPanel::render_heatmap() {
     float legend_y = canvas_pos.y + month_label_height + 7 * (cell_size + cell_gap) + 8;
     float legend_x = canvas_pos.x + label_width;
     
-    draw_list->AddText(ImVec2(legend_x, legend_y), IM_COL32(150, 150, 150, 255), "Less");
+    draw_list->AddText(ImVec2(legend_x, legend_y), label_color, "Less");
     legend_x += 30;
     
-    ImU32 legend_colors[] = {
-        IM_COL32(22, 27, 34, 255),
-        IM_COL32(14, 68, 41, 255),
-        IM_COL32(0, 109, 50, 255),
-        IM_COL32(38, 166, 65, 255),
-        IM_COL32(57, 211, 83, 255)
-    };
+    uint8_t accent_r = theme.accent & 0xFF;
+    uint8_t accent_g = (theme.accent >> 8) & 0xFF;
+    uint8_t accent_b = (theme.accent >> 16) & 0xFF;
+    uint8_t bg_r = theme.background_dark & 0xFF;
+    uint8_t bg_g = (theme.background_dark >> 8) & 0xFF;
+    uint8_t bg_b = (theme.background_dark >> 16) & 0xFF;
+    
+    float levels[] = { 0.0f, 0.25f, 0.5f, 0.75f, 1.0f };
     
     for (int i = 0; i < 5; ++i) {
+        uint8_t r = static_cast<uint8_t>(bg_r + (accent_r - bg_r) * levels[i]);
+        uint8_t g = static_cast<uint8_t>(bg_g + (accent_g - bg_g) * levels[i]);
+        uint8_t b = static_cast<uint8_t>(bg_b + (accent_b - bg_b) * levels[i]);
+        
         draw_list->AddRectFilled(
             ImVec2(legend_x + i * (cell_size + 2), legend_y),
             ImVec2(legend_x + i * (cell_size + 2) + cell_size, legend_y + cell_size),
-            legend_colors[i], 2.0f
+            IM_COL32(r, g, b, 255), 2.0f
         );
     }
     
     legend_x += 5 * (cell_size + 2) + 4;
-    draw_list->AddText(ImVec2(legend_x, legend_y), IM_COL32(150, 150, 150, 255), "More");
+    draw_list->AddText(ImVec2(legend_x, legend_y), label_color, "More");
     
     ImGui::EndChild();
 }
