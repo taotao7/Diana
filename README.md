@@ -97,6 +97,13 @@ make -j8
 - Shows cumulative totals and costs
 - Bar chart visualization of token rate over last 60 seconds
 
+### Agent Token Stats Panel (Right)
+- Aggregates token usage per agent type (Claude Code, Codex, OpenCode)
+- Scans `~/.claude/projects/` and `~/.claude/transcripts/` directories
+- Displays total tokens, cost, and token breakdown (input/output/cache)
+- Session list with subagent detection
+- Real-time rate chart (tokens/sec over last 60 seconds)
+
 ## Architecture
 
 ```
@@ -127,10 +134,12 @@ src/
 │   └── config_exporter.h/cpp        # JSON export/import
 ├── metrics/
 │   ├── metrics_store.h/cpp          # Token metrics aggregation
-│   └── claude_usage_collector.h/cpp # JSONL file watcher
+│   ├── claude_usage_collector.h/cpp # JSONL file watcher
+│   └── agent_token_store.h/cpp      # Per-agent token aggregation
 └── ui/
     ├── claude_code_panel.h/cpp      # Profile list + config editor UI
-    └── metrics_panel.h/cpp          # Token usage charts
+    ├── metrics_panel.h/cpp          # Token usage charts
+    └── agent_token_panel.h/cpp      # Agent token stats panel
 ```
 
 ### Terminal Emulation
@@ -156,7 +165,7 @@ User Input → TerminalPanel → SessionController → ProcessRunner (PTY)
 - [ ] Claude Code Skill/MCP marketplace browser
 - [ ] OpenCode configuration panel (similar to Claude Code)
 - [ ] Codex configuration panel (similar to Claude Code)
-- [ ] Token cost estimation per session
+- [x] Agent token stats panel with per-agent aggregation
 - [ ] Session history and replay
 
 ## Dependencies
@@ -172,6 +181,10 @@ Fetched automatically:
 
 Vendored:
 - libvterm (in `third_party/libvterm/`)
+
+## Font
+
+Diana uses [GNU Unifont](https://unifoundry.com/unifont/) (`unifont.otf`) for text rendering. Unifont is a Unicode font with near-complete coverage of the Basic Multilingual Plane (BMP), supporting virtually all written languages including CJK (Chinese, Japanese, Korean), Cyrillic, Arabic, Hebrew, Thai, and many more. This ensures consistent text display regardless of language or script.
 
 ## License
 

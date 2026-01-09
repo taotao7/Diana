@@ -45,10 +45,13 @@ void render_dockspace(bool first_frame) {
             ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.25f, nullptr, &dockspace_id);
             ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.3f, nullptr, &dockspace_id);
             ImGuiID dock_id_center = dockspace_id;
+            
+            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.5f, nullptr, &dock_id_right);
 
             ImGui::DockBuilderDockWindow("Claude Code", dock_id_left);
             ImGui::DockBuilderDockWindow("Terminal", dock_id_center);
             ImGui::DockBuilderDockWindow("Token Metrics", dock_id_right);
+            ImGui::DockBuilderDockWindow("Agent Token Stats", dock_id_right_bottom);
 
             ImGui::DockBuilderFinish(dockspace_id);
         }
@@ -66,6 +69,7 @@ void render_dockspace(bool first_frame) {
             if (ImGui::MenuItem("Terminal")) {}
             if (ImGui::MenuItem("Claude Code")) {}
             if (ImGui::MenuItem("Token Metrics")) {}
+            if (ImGui::MenuItem("Agent Token Stats")) {}
             ImGui::Separator();
             if (ImGui::BeginMenu("Theme")) {
                 ThemeMode mode = get_theme_mode();

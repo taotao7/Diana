@@ -1,5 +1,6 @@
 #include "app/app_shell.h"
 #include "app/dockspace.h"
+#include "ui/agent_token_panel.h"
 
 #include "imgui.h"
 
@@ -13,6 +14,7 @@ void AppShell::init() {
     terminal_panel_ = std::make_unique<TerminalPanel>();
     metrics_panel_ = std::make_unique<MetricsPanel>();
     claude_code_panel_ = std::make_unique<ClaudeCodePanel>();
+    agent_token_panel_ = std::make_unique<AgentTokenPanel>();
     
     claude_code_panel_->set_profile_store(profile_store_.get());
 }
@@ -24,6 +26,7 @@ void AppShell::render() {
     terminal_panel_->render();
     metrics_panel_->render();
     claude_code_panel_->render();
+    agent_token_panel_->render();
 }
 
 void AppShell::shutdown() {

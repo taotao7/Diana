@@ -164,10 +164,12 @@ add_executable(diana
     src/adapters/claude_profile_store.cpp
     src/ui/metrics_panel.cpp
     src/ui/claude_code_panel.cpp
+    src/ui/agent_token_panel.cpp
     src/ui/theme.cpp
     $<$<PLATFORM_ID:Darwin>:src/ui/theme_macos.mm>
     src/metrics/metrics_store.cpp
     src/metrics/claude_usage_collector.cpp
+    src/metrics/agent_token_store.cpp
 )
 
 target_include_directories(diana PRIVATE
