@@ -11,6 +11,7 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 - Provider/model configuration switching with atomic file updates
 - Real-time token usage monitoring with charts
 - Config import/export for backup and sharing
+- Claude Code multi-profile configuration management
 
 ## Supported Agents
 
@@ -71,11 +72,12 @@ make -j8
 - Type in the input field and press Enter to send commands
 - Click "Stop" to terminate the agent
 
-### Profiles Panel (Left)
-- View and edit provider/model settings for each agent
-- Type any custom provider name or select from presets dropdown
-- Click "Apply" to save changes (requires agent restart)
-- Use "Export All..." / "Import..." to backup or restore configs
+### Claude Code Panel (Left)
+- Multi-profile configuration management
+- Create, edit, rename, delete profiles
+- Import current config from `settings.json`
+- Radio button to activate profile (syncs to `settings.json`)
+- Full config editing: model, env vars, permissions, sandbox, attribution
 
 ### Token Metrics Panel (Right)
 - Monitors token usage from `~/.claude/*.jsonl` files
@@ -83,21 +85,64 @@ make -j8
 - Shows cumulative totals and costs
 - Bar chart visualization of token rate over last 60 seconds
 
-## Project Structure
+## Architecture
 
 ```
 src/
-├── app/           # Application shell and docking
-├── terminal/      # Terminal buffer, session, panel
-├── process/       # Process spawning and session controller
-├── adapters/      # Config adapters for each agent
-├── metrics/       # Token monitoring and storage
-└── ui/            # UI panels (profiles, metrics)
-tests/
-├── core/          # EventQueue tests
-├── metrics/       # MetricsStore tests
-└── adapters/      # ConfigExporter tests
+├── main.cpp                    # Entry point, GLFW/OpenGL setup
+├── app/
+│   ├── app_shell.h/cpp         # Main application orchestrator
+│   └── dockspace.h/cpp         # ImGui docking layout
+├── terminal/
+│   ├── terminal_buffer.h/cpp   # Ring buffer for terminal output
+│   ├── terminal_session.h/cpp  # Per-tab session state
+│   ├── terminal_panel.h/cpp    # Multi-tab terminal UI
+│   └── ansi_parser.h/cpp       # ANSI escape sequence handling
+├── process/
+│   ├── process_runner.h/cpp    # PTY/fork process spawning (POSIX)
+│   └── session_controller.h/cpp # Agent lifecycle management
+├── adapters/
+│   ├── app_adapter.h           # Abstract adapter interface
+│   ├── claude_code_adapter.h/cpp
+│   ├── claude_code_config.h/cpp # Full Claude Code settings struct
+│   ├── profile_store.h/cpp     # Multi-profile CRUD + active detection
+│   ├── codex_adapter.h/cpp
+│   ├── opencode_adapter.h/cpp
+│   ├── config_manager.h/cpp    # Unified config access
+│   └── config_exporter.h/cpp   # JSON export/import
+├── metrics/
+│   ├── metrics_store.h/cpp     # Token metrics aggregation
+│   └── claude_usage_collector.h/cpp # JSONL file watcher
+├── ui/
+│   ├── claude_code_panel.h/cpp # Profile list + config editor UI
+│   ├── metrics_panel.h/cpp     # Token usage charts
+│   └── profiles_panel.h/cpp    # (legacy, to be removed)
+└── core/
+    ├── event_queue.h           # Thread-safe event queue
+    └── session_events.h        # Event type definitions
 ```
+
+### Data Flow
+
+```
+User Input → TerminalPanel → SessionController → ProcessRunner (PTY)
+                                    ↓
+                              AppAdapter (config read/write)
+                                    ↓
+                              ~/.claude/settings.json
+                                    ↓
+                              ProfileStore (multi-profile management)
+                                    ↓
+                              ~/.claude/diana_profiles.json
+```
+
+## Roadmap
+
+- [ ] Claude Code Skill/MCP marketplace browser
+- [ ] OpenCode configuration panel (similar to Claude Code)
+- [ ] Codex configuration panel (similar to Claude Code)
+- [ ] Token cost estimation per session
+- [ ] Session history and replay
 
 ## Dependencies
 
