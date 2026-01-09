@@ -37,6 +37,7 @@ private:
     ProfileStore* profile_store_ = nullptr;
     
     std::string editing_profile_name_;
+    std::string editing_profile_new_name_;
     ClaudeCodeConfig editing_config_;
     std::string editing_description_;
     bool config_modified_ = false;

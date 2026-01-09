@@ -177,7 +177,17 @@ void ClaudeCodePanel::render_config_editor() {
     
     bool is_active = (profile_store_->active_profile() == editing_profile_name_);
     
-    ImGui::Text("Editing: %s", editing_profile_name_.c_str());
+    char name_buf[128];
+    std::strncpy(name_buf, editing_profile_new_name_.c_str(), sizeof(name_buf) - 1);
+    name_buf[sizeof(name_buf) - 1] = '\0';
+    ImGui::Text("Name:");
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(200);
+    if (ImGui::InputText("##ProfileName", name_buf, sizeof(name_buf))) {
+        editing_profile_new_name_ = name_buf;
+        config_modified_ = true;
+    }
+    
     if (is_active) {
         ImGui::SameLine();
         ImGui::TextColored(ImVec4(0.4f, 1, 0.4f, 1), "(active)");
@@ -505,6 +515,7 @@ void ClaudeCodePanel::select_profile(const std::string& name) {
     auto profile = profile_store_->get_profile(name);
     if (profile) {
         editing_profile_name_ = name;
+        editing_profile_new_name_ = name;
         editing_config_ = profile->config;
         editing_description_ = profile->description;
         config_modified_ = false;
@@ -517,6 +528,23 @@ void ClaudeCodePanel::create_new_profile() {
 
 void ClaudeCodePanel::save_current_profile() {
     if (editing_profile_name_.empty()) return;
+    
+    bool name_changed = (editing_profile_new_name_ != editing_profile_name_);
+    
+    if (name_changed) {
+        if (editing_profile_new_name_.empty()) {
+            status_message_ = "Error: Name cannot be empty";
+            status_time_ = 3.0f;
+            return;
+        }
+        
+        if (!profile_store_->rename_profile(editing_profile_name_, editing_profile_new_name_)) {
+            status_message_ = "Error: Name already exists";
+            status_time_ = 3.0f;
+            return;
+        }
+        editing_profile_name_ = editing_profile_new_name_;
+    }
     
     ClaudeCodeProfile profile;
     profile.name = editing_profile_name_;

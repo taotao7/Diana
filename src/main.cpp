@@ -36,7 +36,7 @@ int main(int argc, char** argv) {
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 #endif
 
-    GLFWwindow* window = glfwCreateWindow(1600, 900, "agent47 - AI Agent Monitor", nullptr, nullptr);
+    GLFWwindow* window = glfwCreateWindow(1600, 900, "Diana - AI Agent Monitor", nullptr, nullptr);
     if (!window) {
         fprintf(stderr, "Failed to create GLFW window\n");
         glfwTerminate();

@@ -206,4 +206,32 @@ bool ProfileStore::write_current_config(const ClaudeCodeConfig& config) {
     return true;
 }
 
+void ProfileStore::detect_active_profile() {
+    ClaudeCodeConfig current = read_current_config();
+    
+    for (const auto& p : profiles_) {
+        if (configs_match(current, p.config)) {
+            if (active_profile_ != p.name) {
+                active_profile_ = p.name;
+                save();
+            }
+            return;
+        }
+    }
+    
+    if (!active_profile_.empty()) {
+        active_profile_.clear();
+        save();
+    }
+}
+
+bool ProfileStore::configs_match(const ClaudeCodeConfig& a, const ClaudeCodeConfig& b) const {
+    return a.model == b.model &&
+           a.env == b.env &&
+           a.permissions.default_mode == b.permissions.default_mode &&
+           a.permissions.allow == b.permissions.allow &&
+           a.permissions.deny == b.permissions.deny &&
+           a.always_thinking_enabled == b.always_thinking_enabled;
+}
+
 }

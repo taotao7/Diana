@@ -25,6 +25,7 @@ public:
     bool rename_profile(const std::string& old_name, const std::string& new_name);
     
     bool set_active_profile(const std::string& name);
+    void detect_active_profile();
     
     ClaudeCodeConfig read_current_config();
     bool write_current_config(const ClaudeCodeConfig& config);
@@ -39,6 +40,7 @@ private:
     std::string settings_path_;
     
     int64_t current_timestamp() const;
+    bool configs_match(const ClaudeCodeConfig& a, const ClaudeCodeConfig& b) const;
 };
 
 }
