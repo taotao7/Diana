@@ -5,6 +5,21 @@
 
 namespace diana {
 
+namespace {
+
+std::string format_tokens(uint64_t tokens) {
+    if (tokens >= 1000000000) {
+        return std::to_string(tokens / 1000000000) + "." + std::to_string((tokens % 1000000000) / 100000000) + "B";
+    } else if (tokens >= 1000000) {
+        return std::to_string(tokens / 1000000) + "." + std::to_string((tokens % 1000000) / 100000) + "M";
+    } else if (tokens >= 1000) {
+        return std::to_string(tokens / 1000) + "." + std::to_string((tokens % 1000) / 100) + "K";
+    }
+    return std::to_string(tokens);
+}
+
+}
+
 AgentTokenPanel::AgentTokenPanel()
     : store_(std::make_unique<AgentTokenStore>())
 {
@@ -85,7 +100,7 @@ void AgentTokenPanel::render_agent_selector() {
 void AgentTokenPanel::render_summary_stats() {
     auto stats = store_->get_stats(selected_agent_);
     
-    ImGui::Text("Total Tokens: %llu", static_cast<unsigned long long>(stats.total_tokens.total()));
+    ImGui::Text("Total Tokens: %s", format_tokens(stats.total_tokens.total()).c_str());
     ImGui::SameLine(200);
     ImGui::Text("Cost: $%.4f", stats.total_tokens.cost_usd);
     
@@ -104,19 +119,19 @@ void AgentTokenPanel::render_token_breakdown() {
         
         ImGui::TableNextRow();
         ImGui::TableNextColumn(); ImGui::Text("Input");
-        ImGui::TableNextColumn(); ImGui::Text("%llu", static_cast<unsigned long long>(stats.total_tokens.input_tokens));
+        ImGui::TableNextColumn(); ImGui::Text("%s", format_tokens(stats.total_tokens.input_tokens).c_str());
         
         ImGui::TableNextRow();
         ImGui::TableNextColumn(); ImGui::Text("Output");
-        ImGui::TableNextColumn(); ImGui::Text("%llu", static_cast<unsigned long long>(stats.total_tokens.output_tokens));
+        ImGui::TableNextColumn(); ImGui::Text("%s", format_tokens(stats.total_tokens.output_tokens).c_str());
         
         ImGui::TableNextRow();
         ImGui::TableNextColumn(); ImGui::Text("Cache Creation");
-        ImGui::TableNextColumn(); ImGui::Text("%llu", static_cast<unsigned long long>(stats.total_tokens.cache_creation_tokens));
+        ImGui::TableNextColumn(); ImGui::Text("%s", format_tokens(stats.total_tokens.cache_creation_tokens).c_str());
         
         ImGui::TableNextRow();
         ImGui::TableNextColumn(); ImGui::Text("Cache Read");
-        ImGui::TableNextColumn(); ImGui::Text("%llu", static_cast<unsigned long long>(stats.total_tokens.cache_read_tokens));
+        ImGui::TableNextColumn(); ImGui::Text("%s", format_tokens(stats.total_tokens.cache_read_tokens).c_str());
         
         ImGui::TableNextRow();
         const auto& theme = get_current_theme();
@@ -126,8 +141,8 @@ void AgentTokenPanel::render_token_breakdown() {
         ImVec4 accent_color(accent_r, accent_g, accent_b, 1.0f);
         
         ImGui::TableNextColumn(); ImGui::TextColored(accent_color, "Total");
-        ImGui::TableNextColumn(); ImGui::TextColored(accent_color, "%llu", 
-            static_cast<unsigned long long>(stats.total_tokens.total()));
+        ImGui::TableNextColumn(); ImGui::TextColored(accent_color, "%s", 
+            format_tokens(stats.total_tokens.total()).c_str());
         
         ImGui::EndTable();
     }
