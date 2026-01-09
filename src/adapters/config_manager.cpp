@@ -14,6 +14,7 @@ IAppAdapter* ConfigManager::get_adapter(AppKind kind) {
         case AppKind::ClaudeCode: return claude_adapter_.get();
         case AppKind::Codex:      return codex_adapter_.get();
         case AppKind::OpenCode:   return opencode_adapter_.get();
+        case AppKind::Shell:      return nullptr;
     }
     return nullptr;
 }

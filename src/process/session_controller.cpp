@@ -11,6 +11,7 @@ const char* get_executable_for_app(AppKind app) {
         case AppKind::ClaudeCode: return "claude";
         case AppKind::Codex:      return "codex";
         case AppKind::OpenCode:   return "opencode";
+        case AppKind::Shell:      return std::getenv("SHELL") ? std::getenv("SHELL") : "/bin/bash";
     }
     return "claude";
 }

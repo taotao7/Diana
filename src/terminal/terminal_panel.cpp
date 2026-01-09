@@ -16,8 +16,8 @@ namespace agent47 {
 
 namespace {
 
-const char* APP_NAMES[] = { "Claude Code", "Codex", "OpenCode" };
-constexpr int APP_COUNT = 3;
+const char* APP_NAMES[] = { "Claude Code", "Codex", "OpenCode", "Shell" };
+constexpr int APP_COUNT = 4;
 
 void utf8_encode(uint32_t codepoint, char* out, int* len) {
     if (codepoint > 0x10FFFF) {
@@ -358,13 +358,13 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
             }
             
             ImVec2 content_start = ImGui::GetCursorScreenPos();
+            float scroll_y = ImGui::GetScrollY();
             
             const auto& scrollback = terminal.scrollback();
             bool has_scrollback = !scrollback.empty();
             
             if (has_scrollback) {
                 int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
-                float scroll_y = ImGui::GetScrollY();
                 
                 ImGuiListClipper clipper;
                 clipper.Begin(total_lines);
@@ -399,25 +399,29 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                     session.set_scroll_to_bottom(false);
                 }
                 
-                auto cursor = terminal.get_cursor();
-                int cursor_line_idx = static_cast<int>(scrollback.size()) + cursor.row;
-                float target_x = content_start.x + cursor.col * char_size.x;
-                float target_y = content_start.y + cursor_line_idx * char_size.y - scroll_y;
-                
-                ImVec2 clip_min = ImGui::GetWindowPos();
-                ImVec2 clip_max = ImVec2(clip_min.x + ImGui::GetWindowSize().x, clip_min.y + ImGui::GetWindowSize().y);
-                if (target_y >= clip_min.y - char_size.y && target_y <= clip_max.y) {
-                    render_cursor(session, target_x, target_y, char_size.x, char_size.y);
+                if (session.config().app == AppKind::Shell) {
+                    auto cursor = terminal.get_cursor();
+                    int cursor_line_idx = static_cast<int>(scrollback.size()) + cursor.row;
+                    float target_x = content_start.x + cursor.col * char_size.x;
+                    float target_y = content_start.y + cursor_line_idx * char_size.y - scroll_y;
+                    
+                    ImVec2 clip_min = ImGui::GetWindowPos();
+                    ImVec2 clip_max = ImVec2(clip_min.x + ImGui::GetWindowSize().x, clip_min.y + ImGui::GetWindowSize().y);
+                    if (target_y >= clip_min.y - char_size.y && target_y <= clip_max.y) {
+                        render_cursor(session, target_x, target_y, char_size.x, char_size.y);
+                    }
                 }
             } else {
                 for (int row = 0; row < terminal.rows(); ++row) {
                     render_screen_row(session, row, char_size.y);
                 }
                 
-                auto cursor = terminal.get_cursor();
-                float target_x = content_start.x + cursor.col * char_size.x;
-                float target_y = content_start.y + cursor.row * char_size.y;
-                render_cursor(session, target_x, target_y, char_size.x, char_size.y);
+                if (session.config().app == AppKind::Shell) {
+                    auto cursor = terminal.get_cursor();
+                    float target_x = content_start.x + cursor.col * char_size.x;
+                    float target_y = content_start.y + cursor.row * char_size.y;
+                    render_cursor(session, target_x, target_y, char_size.x, char_size.y);
+                }
             }
         }
     }

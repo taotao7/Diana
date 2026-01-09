@@ -12,6 +12,7 @@ std::string ConfigExporter::app_kind_to_string(AppKind kind) {
         case AppKind::ClaudeCode: return "claude_code";
         case AppKind::Codex: return "codex";
         case AppKind::OpenCode: return "opencode";
+        case AppKind::Shell: return "shell";
     }
     return "unknown";
 }
@@ -20,6 +21,7 @@ std::optional<AppKind> ConfigExporter::string_to_app_kind(const std::string& str
     if (str == "claude_code") return AppKind::ClaudeCode;
     if (str == "codex") return AppKind::Codex;
     if (str == "opencode") return AppKind::OpenCode;
+    if (str == "shell") return AppKind::Shell;
     return std::nullopt;
 }
 

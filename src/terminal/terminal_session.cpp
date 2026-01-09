@@ -27,6 +27,7 @@ const char* TerminalSession::app_kind_name(AppKind kind) {
         case AppKind::ClaudeCode: return "Claude Code";
         case AppKind::Codex:      return "Codex";
         case AppKind::OpenCode:   return "OpenCode";
+        case AppKind::Shell:      return "Shell";
     }
     return "Unknown";
 }
