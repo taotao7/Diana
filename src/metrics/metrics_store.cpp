@@ -36,7 +36,7 @@ TokenStats MetricsStore::compute_stats() const {
     stats.total_tokens = cumulative_input_ + cumulative_output_;
     stats.total_cost = cumulative_cost_;
     
-    if (count_ < 2) {
+    if (count_ == 0) {
         return stats;
     }
     
@@ -45,7 +45,6 @@ TokenStats MetricsStore::compute_stats() const {
     
     uint64_t window_input = 0;
     uint64_t window_output = 0;
-    auto oldest_in_window = now;
     
     for (size_t i = 0; i < count_; ++i) {
         size_t idx = (head_ + kMaxSamples - 1 - i) % kMaxSamples;
@@ -57,23 +56,29 @@ TokenStats MetricsStore::compute_stats() const {
         
         window_input += s.input_tokens;
         window_output += s.output_tokens;
-        
-        if (s.timestamp < oldest_in_window) {
-            oldest_in_window = s.timestamp;
-        }
     }
     
-    auto duration = std::chrono::duration<double>(now - oldest_in_window);
-    if (duration.count() > 0) {
-        double seconds = duration.count();
-        stats.input_per_sec = static_cast<double>(window_input) / seconds;
-        stats.output_per_sec = static_cast<double>(window_output) / seconds;
-        stats.tokens_per_sec = stats.input_per_sec + stats.output_per_sec;
-        
-        stats.input_per_min = stats.input_per_sec * 60.0;
-        stats.output_per_min = stats.output_per_sec * 60.0;
-        stats.tokens_per_min = stats.tokens_per_sec * 60.0;
+    double raw_input_per_sec = static_cast<double>(window_input) / kRateWindowSeconds;
+    double raw_output_per_sec = static_cast<double>(window_output) / kRateWindowSeconds;
+    
+    constexpr double kAlpha = 0.15;
+    
+    if (last_ema_update_.time_since_epoch().count() == 0) {
+        ema_input_per_sec_ = raw_input_per_sec;
+        ema_output_per_sec_ = raw_output_per_sec;
+    } else {
+        ema_input_per_sec_ = kAlpha * raw_input_per_sec + (1.0 - kAlpha) * ema_input_per_sec_;
+        ema_output_per_sec_ = kAlpha * raw_output_per_sec + (1.0 - kAlpha) * ema_output_per_sec_;
     }
+    last_ema_update_ = now;
+    
+    stats.input_per_sec = ema_input_per_sec_;
+    stats.output_per_sec = ema_output_per_sec_;
+    stats.tokens_per_sec = stats.input_per_sec + stats.output_per_sec;
+    
+    stats.input_per_min = stats.input_per_sec * 60.0;
+    stats.output_per_min = stats.output_per_sec * 60.0;
+    stats.tokens_per_min = stats.tokens_per_sec * 60.0;
     
     return stats;
 }
@@ -117,6 +122,9 @@ void MetricsStore::clear() {
     cumulative_input_ = 0;
     cumulative_output_ = 0;
     cumulative_cost_ = 0.0;
+    ema_input_per_sec_ = 0.0;
+    ema_output_per_sec_ = 0.0;
+    last_ema_update_ = {};
 }
 
 }

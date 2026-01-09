@@ -24,6 +24,12 @@ extern "C" bool diana_is_ctrl_pressed() {
            glfwGetKey(g_main_window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS;
 }
 
+extern "C" void diana_request_exit() {
+    if (g_main_window) {
+        glfwSetWindowShouldClose(g_main_window, GLFW_TRUE);
+    }
+}
+
 int main(int argc, char** argv) {
     (void)argc;
     (void)argv;

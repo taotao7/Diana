@@ -4,6 +4,8 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
+extern "C" void diana_request_exit();
+
 namespace agent47 {
 
 void render_dockspace(bool first_frame) {
@@ -57,7 +59,7 @@ void render_dockspace(bool first_frame) {
             if (ImGui::MenuItem("Import Config...")) {}
             if (ImGui::MenuItem("Export Config...")) {}
             ImGui::Separator();
-            if (ImGui::MenuItem("Exit")) {}
+            if (ImGui::MenuItem("Exit")) { diana_request_exit(); }
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View")) {

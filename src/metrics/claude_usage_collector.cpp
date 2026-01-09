@@ -35,36 +35,52 @@ void ClaudeUsageCollector::poll() {
     }
 }
 
-void ClaudeUsageCollector::scan_directory() {
+void ClaudeUsageCollector::scan_directory_recursive(const std::filesystem::path& dir) {
     namespace fs = std::filesystem;
     
-    if (!fs::exists(claude_dir_) || !fs::is_directory(claude_dir_)) {
+    if (!fs::exists(dir) || !fs::is_directory(dir)) {
         return;
     }
     
-    for (const auto& entry : fs::directory_iterator(claude_dir_)) {
-        if (!entry.is_regular_file()) continue;
-        
-        const auto& path = entry.path();
-        if (path.extension() != ".jsonl") continue;
-        
-        bool found = false;
-        for (const auto& f : files_) {
-            if (f.path == path) {
-                found = true;
-                break;
+    for (const auto& entry : fs::directory_iterator(dir)) {
+        if (entry.is_directory()) {
+            scan_directory_recursive(entry.path());
+        } else if (entry.is_regular_file()) {
+            const auto& path = entry.path();
+            if (path.extension() != ".jsonl") continue;
+            
+            bool found = false;
+            for (const auto& f : files_) {
+                if (f.path == path) {
+                    found = true;
+                    break;
+                }
+            }
+            
+            if (!found) {
+                FileState state;
+                state.path = path;
+                
+                std::ifstream file(path, std::ios::ate);
+                if (file) {
+                    state.last_pos = file.tellg();
+                } else {
+                    state.last_pos = 0;
+                }
+                state.last_mtime = fs::last_write_time(path);
+                
+                files_.push_back(std::move(state));
+                ++files_processed_;
             }
         }
-        
-        if (!found) {
-            FileState state;
-            state.path = path;
-            state.last_pos = 0;
-            state.last_mtime = fs::file_time_type::min();
-            files_.push_back(std::move(state));
-            ++files_processed_;
-        }
     }
+}
+
+void ClaudeUsageCollector::scan_directory() {
+    namespace fs = std::filesystem;
+    
+    fs::path projects_dir = fs::path(claude_dir_) / "projects";
+    scan_directory_recursive(projects_dir);
 }
 
 void ClaudeUsageCollector::process_file(FileState& state) {
@@ -101,8 +117,16 @@ bool ClaudeUsageCollector::parse_jsonl_line(const std::string& line, TokenSample
     try {
         auto json = nlohmann::json::parse(line);
         
-        if (json.contains("usage")) {
-            const auto& usage = json["usage"];
+        const nlohmann::json* usage_ptr = nullptr;
+        
+        if (json.contains("message") && json["message"].contains("usage")) {
+            usage_ptr = &json["message"]["usage"];
+        } else if (json.contains("usage")) {
+            usage_ptr = &json["usage"];
+        }
+        
+        if (usage_ptr) {
+            const auto& usage = *usage_ptr;
             
             if (usage.contains("input_tokens")) {
                 sample.input_tokens = usage["input_tokens"].get<uint64_t>();
@@ -110,27 +134,11 @@ bool ClaudeUsageCollector::parse_jsonl_line(const std::string& line, TokenSample
             if (usage.contains("output_tokens")) {
                 sample.output_tokens = usage["output_tokens"].get<uint64_t>();
             }
-            sample.total_tokens = sample.input_tokens + sample.output_tokens;
-            
-            if (json.contains("costUSD")) {
-                sample.cost_usd = json["costUSD"].get<double>();
+            if (usage.contains("cache_read_input_tokens")) {
+                sample.input_tokens += usage["cache_read_input_tokens"].get<uint64_t>();
             }
-            
-            sample.timestamp = std::chrono::steady_clock::now();
-            return true;
-        }
-        
-        if (json.contains("inputTokens") || json.contains("input_tokens")) {
-            if (json.contains("inputTokens")) {
-                sample.input_tokens = json["inputTokens"].get<uint64_t>();
-            } else {
-                sample.input_tokens = json["input_tokens"].get<uint64_t>();
-            }
-            
-            if (json.contains("outputTokens")) {
-                sample.output_tokens = json["outputTokens"].get<uint64_t>();
-            } else if (json.contains("output_tokens")) {
-                sample.output_tokens = json["output_tokens"].get<uint64_t>();
+            if (usage.contains("cache_creation_input_tokens")) {
+                sample.input_tokens += usage["cache_creation_input_tokens"].get<uint64_t>();
             }
             
             sample.total_tokens = sample.input_tokens + sample.output_tokens;
@@ -140,7 +148,7 @@ bool ClaudeUsageCollector::parse_jsonl_line(const std::string& line, TokenSample
             }
             
             sample.timestamp = std::chrono::steady_clock::now();
-            return true;
+            return sample.total_tokens > 0;
         }
         
     } catch (...) {

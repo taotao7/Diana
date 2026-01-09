@@ -58,6 +58,11 @@ private:
     uint64_t cumulative_input_ = 0;
     uint64_t cumulative_output_ = 0;
     double cumulative_cost_ = 0.0;
+    
+    // EMA smoothing for rates
+    mutable double ema_input_per_sec_ = 0.0;
+    mutable double ema_output_per_sec_ = 0.0;
+    mutable std::chrono::steady_clock::time_point last_ema_update_{};
 };
 
 }

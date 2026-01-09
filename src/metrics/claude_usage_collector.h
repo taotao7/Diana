@@ -28,6 +28,7 @@ private:
     };
     
     void scan_directory();
+    void scan_directory_recursive(const std::filesystem::path& dir);
     void process_file(FileState& state);
     bool parse_jsonl_line(const std::string& line, TokenSample& sample);
     
