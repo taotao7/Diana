@@ -74,6 +74,13 @@ void SessionController::send_input(TerminalSession& session, const std::string& 
     }
 }
 
+void SessionController::send_raw_key(TerminalSession& session, const std::string& key) {
+    auto it = runners_.find(session.id());
+    if (it != runners_.end() && it->second && it->second->is_running()) {
+        it->second->write_stdin(key);
+    }
+}
+
 void SessionController::process_events() {
     while (auto event_opt = event_queue_.try_pop()) {
         std::visit([](auto&& evt) {

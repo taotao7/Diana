@@ -38,15 +38,21 @@ void TerminalBuffer::append_line(const std::string& text, uint32_t color) {
 void TerminalBuffer::append_text(const std::string& text, uint32_t color) {
     (void)color;
     
-    for (char c : text) {
+    size_t i = 0;
+    while (i < text.size()) {
+        char c = text[i];
         if (c == '\n') {
             TerminalLine line;
             line.spans = ansi_parser_.parse_line(pending_text_);
             line.timestamp = current_timestamp_ms();
             segments_[active_segment_idx_].lines.push_back(std::move(line));
             pending_text_.clear();
-        } else if (c != '\r') {
+            ++i;
+        } else if (c == '\r') {
+            ++i;
+        } else {
             pending_text_ += c;
+            ++i;
         }
     }
 

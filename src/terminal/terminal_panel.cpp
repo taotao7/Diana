@@ -146,35 +146,7 @@ void TerminalPanel::render_control_bar(TerminalSession& session) {
     
     ImGui::SameLine();
     
-    ImGui::PushItemWidth(150);
-    char provider_buf[64];
-    strncpy(provider_buf, session.config().provider.c_str(), sizeof(provider_buf) - 1);
-    provider_buf[sizeof(provider_buf) - 1] = '\0';
-    
-    if (!can_change) ImGui::BeginDisabled();
-    if (ImGui::InputTextWithHint("##Provider", "Provider", provider_buf, sizeof(provider_buf))) {
-        session.config().provider = provider_buf;
-    }
-    if (!can_change) ImGui::EndDisabled();
-    ImGui::PopItemWidth();
-    
-    ImGui::SameLine();
-    
-    ImGui::PushItemWidth(200);
-    char model_buf[128];
-    strncpy(model_buf, session.config().model.c_str(), sizeof(model_buf) - 1);
-    model_buf[sizeof(model_buf) - 1] = '\0';
-    
-    if (!can_change) ImGui::BeginDisabled();
-    if (ImGui::InputTextWithHint("##Model", "Model", model_buf, sizeof(model_buf))) {
-        session.config().model = model_buf;
-    }
-    if (!can_change) ImGui::EndDisabled();
-    ImGui::PopItemWidth();
-    
-    ImGui::SameLine();
-    
-    ImGui::PushItemWidth(200);
+    ImGui::PushItemWidth(250);
     const std::string& workdir = session.config().working_dir;
     std::string display_path = workdir.empty() ? "(not set)" : workdir;
     ImGui::InputText("##WorkDir", const_cast<char*>(display_path.c_str()), 
@@ -277,26 +249,59 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
 }
 
 void TerminalPanel::render_input_line(TerminalSession& session) {
-    ImGui::PushItemWidth(-1);
-    
-    ImGuiInputTextFlags flags = ImGuiInputTextFlags_EnterReturnsTrue;
-    
     bool can_input = session.state() == SessionState::Running;
     
-    static char input_buf[4096] = "";
-    
-    if (!can_input) ImGui::BeginDisabled();
-    bool send = ImGui::InputText("##Input", input_buf, sizeof(input_buf), flags);
-    if (!can_input) ImGui::EndDisabled();
-    
-    if (send && input_buf[0] != '\0' && can_input) {
-        session.buffer().append_line(std::string("> ") + input_buf, COLOR_INPUT_ECHO);
-        controller_.send_input(session, input_buf);
-        session.request_scroll_to_bottom();
-        input_buf[0] = '\0';
+    if (can_input) {
+        ImGuiIO& io = ImGui::GetIO();
+        
+        if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
+            if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
+                controller_.send_raw_key(session, "\r");
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                controller_.send_raw_key(session, "\x1b");
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
+                controller_.send_raw_key(session, "\x7f");
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_Tab)) {
+                controller_.send_raw_key(session, "\t");
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+                controller_.send_raw_key(session, "\x1b[A");
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+                controller_.send_raw_key(session, "\x1b[B");
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+                controller_.send_raw_key(session, "\x1b[C");
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
+                controller_.send_raw_key(session, "\x1b[D");
+            }
+            else if (io.InputQueueCharacters.Size > 0) {
+                for (int i = 0; i < io.InputQueueCharacters.Size; ++i) {
+                    ImWchar c = io.InputQueueCharacters[i];
+                    if (c > 0) {
+                        char utf8[5] = {0};
+                        if (c < 0x80) {
+                            utf8[0] = static_cast<char>(c);
+                        } else if (c < 0x800) {
+                            utf8[0] = static_cast<char>(0xC0 | (c >> 6));
+                            utf8[1] = static_cast<char>(0x80 | (c & 0x3F));
+                        } else {
+                            utf8[0] = static_cast<char>(0xE0 | (c >> 12));
+                            utf8[1] = static_cast<char>(0x80 | ((c >> 6) & 0x3F));
+                            utf8[2] = static_cast<char>(0x80 | (c & 0x3F));
+                        }
+                        controller_.send_raw_key(session, utf8);
+                    }
+                }
+            }
+        }
     }
     
-    ImGui::PopItemWidth();
+    ImGui::TextDisabled("Press keys to interact with terminal (Enter, Esc, numbers, letters...)");
 }
 
 }
