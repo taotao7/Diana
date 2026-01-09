@@ -1,46 +1,43 @@
 #include "ansi_parser.h"
+#include "ui/theme.h"
 #include <sstream>
 #include <cstdlib>
 
 namespace agent47 {
 
-namespace {
-
-enum AnsiBasicColor : uint32_t {
-    BLACK   = 0xFF000000,
-    RED     = 0xFF0000CD,
-    GREEN   = 0xFF00CD00,
-    YELLOW  = 0xFF00CDCD,
-    BLUE    = 0xFFCD0000,
-    MAGENTA = 0xFFCD00CD,
-    CYAN    = 0xFFCDCD00,
-    WHITE   = 0xFFE5E5E5,
-};
-
-enum AnsiBrightColor : uint32_t {
-    BRIGHT_BLACK   = 0xFF7F7F7F,
-    BRIGHT_RED     = 0xFF0000FF,
-    BRIGHT_GREEN   = 0xFF00FF00,
-    BRIGHT_YELLOW  = 0xFF00FFFF,
-    BRIGHT_BLUE    = 0xFFFF0000,
-    BRIGHT_MAGENTA = 0xFFFF00FF,
-    BRIGHT_CYAN    = 0xFFFFFF00,
-    BRIGHT_WHITE   = 0xFFFFFFFF,
-};
-
-constexpr uint32_t BASIC_COLORS[] = {
-    BLACK, RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE
-};
-
-constexpr uint32_t BRIGHT_COLORS[] = {
-    BRIGHT_BLACK, BRIGHT_RED, BRIGHT_GREEN, BRIGHT_YELLOW,
-    BRIGHT_BLUE, BRIGHT_MAGENTA, BRIGHT_CYAN, BRIGHT_WHITE
-};
-
+AnsiParser::AnsiParser() {
+    update_palette_from_theme();
+    reset();
 }
 
-AnsiParser::AnsiParser() {
-    reset();
+void AnsiParser::set_default_color(uint32_t color) {
+    default_color_ = color;
+    current_color_ = color;
+}
+
+void AnsiParser::update_palette_from_theme() {
+    const Theme& theme = get_current_theme();
+    
+    default_color_ = theme.terminal_fg;
+    current_color_ = default_color_;
+    
+    basic_colors_[0] = theme.ansi.black;
+    basic_colors_[1] = theme.ansi.red;
+    basic_colors_[2] = theme.ansi.green;
+    basic_colors_[3] = theme.ansi.yellow;
+    basic_colors_[4] = theme.ansi.blue;
+    basic_colors_[5] = theme.ansi.magenta;
+    basic_colors_[6] = theme.ansi.cyan;
+    basic_colors_[7] = theme.ansi.white;
+    
+    bright_colors_[0] = theme.ansi.bright_black;
+    bright_colors_[1] = theme.ansi.bright_red;
+    bright_colors_[2] = theme.ansi.bright_green;
+    bright_colors_[3] = theme.ansi.bright_yellow;
+    bright_colors_[4] = theme.ansi.bright_blue;
+    bright_colors_[5] = theme.ansi.bright_magenta;
+    bright_colors_[6] = theme.ansi.bright_cyan;
+    bright_colors_[7] = theme.ansi.bright_white;
 }
 
 void AnsiParser::reset() {
@@ -121,18 +118,18 @@ void AnsiParser::process_sgr(const std::string& params) {
             current_color_ = default_color_;
         }
         else if (code >= 30 && code <= 37) {
-            current_color_ = BASIC_COLORS[code - 30];
+            current_color_ = basic_colors_[code - 30];
         }
         else if (code >= 90 && code <= 97) {
-            current_color_ = BRIGHT_COLORS[code - 90];
+            current_color_ = bright_colors_[code - 90];
         }
         else if (code == 38) {
             if (i + 1 < codes.size() && codes[i + 1] == 5 && i + 2 < codes.size()) {
                 int idx = codes[i + 2];
                 if (idx < 8) {
-                    current_color_ = BASIC_COLORS[idx];
+                    current_color_ = basic_colors_[idx];
                 } else if (idx < 16) {
-                    current_color_ = BRIGHT_COLORS[idx - 8];
+                    current_color_ = bright_colors_[idx - 8];
                 } else if (idx < 232) {
                     int n = idx - 16;
                     int r = (n / 36) * 51;

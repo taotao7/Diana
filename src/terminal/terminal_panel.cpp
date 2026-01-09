@@ -1,5 +1,6 @@
 #include "terminal_panel.h"
 #include "core/session_events.h"
+#include "ui/theme.h"
 #include <imgui.h>
 #include <nfd.h>
 #include <algorithm>
@@ -8,11 +9,6 @@
 namespace agent47 {
 
 namespace {
-
-constexpr uint32_t COLOR_OUTPUT_STDOUT = 0xFFDCDCDC;
-constexpr uint32_t COLOR_OUTPUT_STDERR = 0xFF6464FF;
-constexpr uint32_t COLOR_INPUT_ECHO = 0xFF88FF88;
-constexpr uint32_t COLOR_SYSTEM_MSG = 0xFFFFFF88;
 
 const char* APP_NAMES[] = { "Claude Code", "Codex", "OpenCode" };
 constexpr int APP_COUNT = 3;
@@ -82,7 +78,8 @@ void TerminalPanel::process_events() {
             
             if constexpr (std::is_same_v<T, OutputEvent>) {
                 if (auto* session = find_session(evt.session_id)) {
-                    uint32_t color = evt.is_stderr ? COLOR_OUTPUT_STDERR : COLOR_OUTPUT_STDOUT;
+                    const auto& theme = get_current_theme();
+                    uint32_t color = evt.is_stderr ? theme.error : theme.terminal_fg;
                     session->buffer().append_text(evt.data, color);
                     session->request_scroll_to_bottom();
                 }
@@ -91,7 +88,7 @@ void TerminalPanel::process_events() {
                 if (auto* session = find_session(evt.session_id)) {
                     session->set_state(SessionState::Idle);
                     std::string msg = "Process exited with code " + std::to_string(evt.exit_code);
-                    session->buffer().append_line(msg, COLOR_SYSTEM_MSG);
+                    session->buffer().append_line(msg, get_current_theme().warning);
                     session->request_scroll_to_bottom();
                 }
             }
@@ -212,6 +209,14 @@ void TerminalPanel::handle_start_stop(TerminalSession& session) {
 void TerminalPanel::render_output_area(TerminalSession& session) {
     float footer_height = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
     
+    const auto& theme = get_current_theme();
+    ImVec4 term_bg;
+    term_bg.x = ((theme.terminal_bg >> 0) & 0xFF) / 255.0f;
+    term_bg.y = ((theme.terminal_bg >> 8) & 0xFF) / 255.0f;
+    term_bg.z = ((theme.terminal_bg >> 16) & 0xFF) / 255.0f;
+    term_bg.w = 1.0f;
+    
+    ImGui::PushStyleColor(ImGuiCol_ChildBg, term_bg);
     if (ImGui::BeginChild("OutputArea", ImVec2(0, -footer_height), true, ImGuiWindowFlags_HorizontalScrollbar)) {
         ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(0, 1));
         
@@ -246,6 +251,7 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
         }
     }
     ImGui::EndChild();
+    ImGui::PopStyleColor();
 }
 
 void TerminalPanel::render_input_line(TerminalSession& session) {

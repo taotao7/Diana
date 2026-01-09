@@ -10,6 +10,7 @@
 #include <GLFW/glfw3.h>
 
 #include "app/app_shell.h"
+#include "ui/theme.h"
 
 static void glfw_error_callback(int error, const char* description) {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
@@ -55,6 +56,7 @@ int main(int argc, char** argv) {
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     ImGui::StyleColorsDark();
+    agent47::apply_theme(agent47::get_dark_theme());
 
     ImGuiStyle& style = ImGui::GetStyle();
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {

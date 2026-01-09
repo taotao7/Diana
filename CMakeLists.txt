@@ -160,6 +160,7 @@ add_executable(diana
     src/adapters/claude_profile_store.cpp
     src/ui/metrics_panel.cpp
     src/ui/claude_code_panel.cpp
+    src/ui/theme.cpp
     src/metrics/metrics_store.cpp
     src/metrics/claude_usage_collector.cpp
 )

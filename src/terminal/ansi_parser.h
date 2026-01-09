@@ -20,6 +20,9 @@ public:
     void reset();
     
     uint32_t current_color() const { return current_color_; }
+    
+    void set_default_color(uint32_t color);
+    void update_palette_from_theme();
 
 private:
     void process_sgr(const std::string& params);
@@ -27,6 +30,9 @@ private:
     
     uint32_t current_color_ = 0xFFDCDCDC;
     uint32_t default_color_ = 0xFFDCDCDC;
+    
+    uint32_t basic_colors_[8];
+    uint32_t bright_colors_[8];
 };
 
 }
