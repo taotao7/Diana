@@ -1,11 +1,20 @@
 #include "ui/theme.h"
 #include "imgui.h"
 
+#if defined(__APPLE__)
+#include <TargetConditionals.h>
+#if TARGET_OS_MAC
+extern "C" bool diana_is_dark_mode();
+#endif
+#endif
+
 namespace agent47 {
 
 namespace {
     Theme g_current_theme;
+    ThemeMode g_theme_mode = ThemeMode::System;
     bool g_theme_initialized = false;
+    bool g_last_system_dark = true;
 }
 
 Theme get_dark_theme() {
@@ -225,17 +234,49 @@ void apply_theme(const Theme& theme) {
 
 const Theme& get_current_theme() {
     if (!g_theme_initialized) {
-        g_current_theme = get_dark_theme();
-        g_theme_initialized = true;
+        update_system_theme();
     }
     return g_current_theme;
 }
 
-void set_current_theme(ThemeKind kind) {
-    if (kind == ThemeKind::Dark) {
+ThemeMode get_theme_mode() {
+    return g_theme_mode;
+}
+
+void set_theme_mode(ThemeMode mode) {
+    g_theme_mode = mode;
+    
+    if (mode == ThemeMode::System) {
+        update_system_theme();
+    } else if (mode == ThemeMode::Dark) {
         apply_theme(get_dark_theme());
     } else {
         apply_theme(get_light_theme());
+    }
+}
+
+bool is_system_dark_mode() {
+#if defined(__APPLE__) && TARGET_OS_MAC
+    return diana_is_dark_mode();
+#else
+    return true;
+#endif
+}
+
+void update_system_theme() {
+    if (g_theme_mode != ThemeMode::System) {
+        return;
+    }
+    
+    bool is_dark = is_system_dark_mode();
+    
+    if (!g_theme_initialized || is_dark != g_last_system_dark) {
+        g_last_system_dark = is_dark;
+        if (is_dark) {
+            apply_theme(get_dark_theme());
+        } else {
+            apply_theme(get_light_theme());
+        }
     }
 }
 

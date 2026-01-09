@@ -66,12 +66,16 @@ void render_dockspace(bool first_frame) {
             if (ImGui::MenuItem("Token Metrics")) {}
             ImGui::Separator();
             if (ImGui::BeginMenu("Theme")) {
-                const auto& current = get_current_theme();
-                if (ImGui::MenuItem("Dark (Magnetic Night)", nullptr, current.kind == ThemeKind::Dark)) {
-                    set_current_theme(ThemeKind::Dark);
+                ThemeMode mode = get_theme_mode();
+                if (ImGui::MenuItem("System", nullptr, mode == ThemeMode::System)) {
+                    set_theme_mode(ThemeMode::System);
                 }
-                if (ImGui::MenuItem("Light (Beige Terminal)", nullptr, current.kind == ThemeKind::Light)) {
-                    set_current_theme(ThemeKind::Light);
+                ImGui::Separator();
+                if (ImGui::MenuItem("Dark (Magnetic Night)", nullptr, mode == ThemeMode::Dark)) {
+                    set_theme_mode(ThemeMode::Dark);
+                }
+                if (ImGui::MenuItem("Light (Beige Terminal)", nullptr, mode == ThemeMode::Light)) {
+                    set_theme_mode(ThemeMode::Light);
                 }
                 ImGui::EndMenu();
             }

@@ -30,6 +30,12 @@ enum class ThemeKind {
     Light
 };
 
+enum class ThemeMode {
+    System,
+    Dark,
+    Light
+};
+
 struct Theme {
     std::string name;
     ThemeKind kind;
@@ -80,8 +86,8 @@ struct Theme {
 };
 
 // Get predefined themes
-Theme get_dark_theme();    // Analog Dream: Magnetic Night
-Theme get_light_theme();   // Beige Terminal
+Theme get_dark_theme();
+Theme get_light_theme();
 
 // Apply theme to ImGui
 void apply_theme(const Theme& theme);
@@ -89,8 +95,15 @@ void apply_theme(const Theme& theme);
 // Get current theme
 const Theme& get_current_theme();
 
-// Set current theme
-void set_current_theme(ThemeKind kind);
+// Theme mode management
+ThemeMode get_theme_mode();
+void set_theme_mode(ThemeMode mode);
+
+// Call each frame to check system theme changes (when mode is System)
+void update_system_theme();
+
+// Detect system dark mode (platform-specific)
+bool is_system_dark_mode();
 
 // Helper: convert hex RGB to ImGui color (ABGR format)
 constexpr uint32_t hex_to_imgui(uint32_t hex_rgb) {
