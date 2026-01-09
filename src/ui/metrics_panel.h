@@ -18,6 +18,7 @@ private:
     std::unique_ptr<ClaudeUsageCollector> collector_;
     
     std::array<float, 60> rate_history_{};
+    bool show_clear_confirm_ = false;
 };
 
 }

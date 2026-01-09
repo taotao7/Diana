@@ -22,6 +22,9 @@ void MetricsPanel::render() {
     
     update();
     
+    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "Claude Code - Real-time");
+    ImGui::Separator();
+    
     auto stats = store_->compute_stats();
     
     ImGui::Text("Total Tokens: %llu", static_cast<unsigned long long>(stats.total_tokens));
@@ -73,7 +76,29 @@ void MetricsPanel::render() {
     ImGui::Text("Entries parsed: %zu", collector_->entries_parsed());
     
     if (ImGui::Button("Clear Stats")) {
-        store_->clear();
+        show_clear_confirm_ = true;
+    }
+    
+    if (show_clear_confirm_) {
+        ImGui::OpenPopup("Confirm Clear##MetricsPanel");
+    }
+    
+    if (ImGui::BeginPopupModal("Confirm Clear##MetricsPanel", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::Text("Clear all token statistics?");
+        ImGui::Text("This action cannot be undone.");
+        ImGui::Spacing();
+        
+        if (ImGui::Button("Yes, Clear", ImVec2(120, 0))) {
+            store_->clear();
+            show_clear_confirm_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            show_clear_confirm_ = false;
+            ImGui::CloseCurrentPopup();
+        }
+        ImGui::EndPopup();
     }
     
     ImGui::End();
