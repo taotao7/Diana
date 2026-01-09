@@ -18,6 +18,9 @@ public:
     void stop_session(TerminalSession& session);
     void send_input(TerminalSession& session, const std::string& input);
     void send_raw_key(TerminalSession& session, const std::string& key);
+    void send_key(TerminalSession& session, int vterm_key);
+    void send_char(TerminalSession& session, uint32_t codepoint);
+    void resize_pty(TerminalSession& session, int rows, int cols);
     
     void process_events();
     

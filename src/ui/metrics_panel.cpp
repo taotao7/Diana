@@ -17,6 +17,7 @@ void MetricsPanel::update() {
 }
 
 void MetricsPanel::render() {
+    ImGui::SetNextWindowSizeConstraints(ImVec2(250, 300), ImVec2(FLT_MAX, FLT_MAX));
     ImGui::Begin("Token Metrics");
     
     update();

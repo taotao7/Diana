@@ -12,6 +12,7 @@ ClaudeCodePanel::ClaudeCodePanel() {
 }
 
 void ClaudeCodePanel::render() {
+    ImGui::SetNextWindowSizeConstraints(ImVec2(280, 200), ImVec2(FLT_MAX, FLT_MAX));
     ImGui::Begin("Claude Code");
     
     if (!profile_store_) {
@@ -235,17 +236,6 @@ void ClaudeCodePanel::render_config_editor() {
 void ClaudeCodePanel::render_basic_settings() {
     if (ImGui::CollapsingHeader("Basic Settings", ImGuiTreeNodeFlags_DefaultOpen)) {
         ImGui::Indent();
-        
-        char model_buf[256];
-        std::strncpy(model_buf, editing_config_.model.c_str(), sizeof(model_buf) - 1);
-        model_buf[sizeof(model_buf) - 1] = '\0';
-        ImGui::Text("Model:");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(250);
-        if (ImGui::InputTextWithHint("##Model", "claude-sonnet-4-5-20250929", model_buf, sizeof(model_buf))) {
-            editing_config_.model = model_buf;
-            config_modified_ = true;
-        }
         
         if (ImGui::Checkbox("Extended Thinking", &editing_config_.always_thinking_enabled)) {
             config_modified_ = true;

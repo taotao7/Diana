@@ -33,8 +33,8 @@ bool ProcessRunner::start(const ProcessConfig& config) {
     }
     
     struct winsize ws;
-    ws.ws_col = 120;
-    ws.ws_row = 40;
+    ws.ws_col = static_cast<unsigned short>(config.cols);
+    ws.ws_row = static_cast<unsigned short>(config.rows);
     ws.ws_xpixel = 0;
     ws.ws_ypixel = 0;
     
@@ -101,6 +101,18 @@ bool ProcessRunner::write_stdin(const std::string& data) {
     
     ssize_t written = write(pty_fd_, data.c_str(), data.size());
     return written == static_cast<ssize_t>(data.size());
+}
+
+void ProcessRunner::resize(int rows, int cols) {
+    if (pty_fd_ < 0) return;
+    
+    struct winsize ws;
+    ws.ws_row = static_cast<unsigned short>(rows);
+    ws.ws_col = static_cast<unsigned short>(cols);
+    ws.ws_xpixel = 0;
+    ws.ws_ypixel = 0;
+    
+    ioctl(pty_fd_, TIOCSWINSZ, &ws);
 }
 
 void ProcessRunner::io_thread_func() {

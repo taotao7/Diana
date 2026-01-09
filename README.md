@@ -31,6 +31,12 @@ Providers/models can be entered directly in the configuration fields.
 - Xcode Command Line Tools
 - CMake 3.20+
 
+```bash
+# Install via Homebrew
+brew install cmake
+xcode-select --install
+```
+
 ### Linux
 - GCC 9+ or Clang 10+
 - CMake 3.20+

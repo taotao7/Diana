@@ -35,6 +35,9 @@ private:
     uint32_t next_session_id_ = 1;
     
     SessionController controller_;
+    
+    uint32_t renaming_session_id_ = 0;
+    char rename_buffer_[128] = {};
 };
 
 }

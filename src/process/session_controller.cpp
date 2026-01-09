@@ -83,6 +83,32 @@ void SessionController::send_raw_key(TerminalSession& session, const std::string
     }
 }
 
+void SessionController::send_key(TerminalSession& session, int vterm_key) {
+    auto it = runners_.find(session.id());
+    if (it == runners_.end() || !it->second || !it->second->is_running()) {
+        return;
+    }
+    
+    session.terminal().keyboard_key(vterm_key);
+    std::string output = session.terminal().get_output();
+    if (!output.empty()) {
+        it->second->write_stdin(output);
+    }
+}
+
+void SessionController::send_char(TerminalSession& session, uint32_t codepoint) {
+    auto it = runners_.find(session.id());
+    if (it == runners_.end() || !it->second || !it->second->is_running()) {
+        return;
+    }
+    
+    session.terminal().keyboard_unichar(codepoint);
+    std::string output = session.terminal().get_output();
+    if (!output.empty()) {
+        it->second->write_stdin(output);
+    }
+}
+
 void SessionController::process_events() {
     while (auto event_opt = event_queue_.try_pop()) {
         std::visit([](auto&& evt) {
@@ -91,12 +117,22 @@ void SessionController::process_events() {
     }
 }
 
+void SessionController::resize_pty(TerminalSession& session, int rows, int cols) {
+    auto it = runners_.find(session.id());
+    if (it != runners_.end() && it->second && it->second->is_running()) {
+        it->second->resize(rows, cols);
+    }
+    session.terminal().resize(rows, cols);
+}
+
 ProcessConfig SessionController::build_config(const TerminalSession& session) {
     ProcessConfig config;
     config.executable = get_executable_for_app(session.config().app);
     config.working_dir = session.config().working_dir.empty() 
         ? get_working_dir() 
         : session.config().working_dir;
+    config.rows = session.terminal().rows();
+    config.cols = session.terminal().cols();
     return config;
 }
 

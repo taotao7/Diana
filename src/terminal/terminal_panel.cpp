@@ -6,6 +6,10 @@
 #include <algorithm>
 #include <cstdlib>
 
+extern "C" {
+#include <vterm_keycodes.h>
+}
+
 namespace agent47 {
 
 namespace {
@@ -58,6 +62,7 @@ TerminalPanel::TerminalPanel() {
 void TerminalPanel::render() {
     process_events();
     
+    ImGui::SetNextWindowSizeConstraints(ImVec2(400, 300), ImVec2(FLT_MAX, FLT_MAX));
     if (ImGui::Begin("Terminal")) {
         if (sessions_.empty()) {
             ImGui::TextDisabled("No sessions. Press + to create one.");
@@ -75,8 +80,34 @@ void TerminalPanel::render() {
                         flags |= ImGuiTabItemFlags_UnsavedDocument;
                     }
                     
+                    bool is_renaming = (renaming_session_id_ == session->id());
+                    
+                    if (is_renaming) {
+                        ImGui::SetNextItemWidth(100);
+                        if (ImGui::InputText("##RenameTab", rename_buffer_, sizeof(rename_buffer_), 
+                            ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
+                            if (rename_buffer_[0] != '\0') {
+                                session->set_name(rename_buffer_);
+                            }
+                            renaming_session_id_ = 0;
+                        }
+                        if (!ImGui::IsItemActive() && ImGui::IsMouseClicked(0)) {
+                            renaming_session_id_ = 0;
+                        }
+                        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                            renaming_session_id_ = 0;
+                        }
+                        ImGui::SameLine();
+                    }
+                    
                     if (ImGui::BeginTabItem(session->name().c_str(), &open, flags)) {
                         active_session_idx_ = static_cast<uint32_t>(i);
+                        
+                        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+                            renaming_session_id_ = session->id();
+                            std::strncpy(rename_buffer_, session->name().c_str(), sizeof(rename_buffer_) - 1);
+                            rename_buffer_[sizeof(rename_buffer_) - 1] = '\0';
+                        }
                         
                         render_control_bar(*session);
                         handle_start_stop(*session);
@@ -249,10 +280,19 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
     
     ImGui::PushStyleColor(ImGuiCol_ChildBg, term_bg);
     if (ImGui::BeginChild("OutputArea", ImVec2(0, -footer_height), true, ImGuiWindowFlags_HorizontalScrollbar)) {
+        ImVec2 char_size = ImGui::CalcTextSize("W");
+        ImVec2 content_size = ImGui::GetContentRegionAvail();
+        
+        int new_cols = std::max(1, static_cast<int>(content_size.x / char_size.x));
+        int new_rows = std::max(1, static_cast<int>(content_size.y / char_size.y));
+        
         const auto& terminal = session.terminal();
+        if (new_cols != terminal.cols() || new_rows != terminal.rows()) {
+            controller_.resize_pty(session, new_rows, new_cols);
+        }
+        
         const auto& scrollback = terminal.scrollback();
         
-        ImVec2 char_size = ImGui::CalcTextSize("W");
         float line_height = char_size.y;
         
         int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
@@ -353,52 +393,56 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
         
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
             if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
-                controller_.send_raw_key(session, "\r");
+                controller_.send_key(session, VTERM_KEY_ENTER);
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                controller_.send_raw_key(session, "\x1b");
+                controller_.send_key(session, VTERM_KEY_ESCAPE);
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
-                controller_.send_raw_key(session, "\x7f");
+                controller_.send_key(session, VTERM_KEY_BACKSPACE);
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_Tab)) {
-                controller_.send_raw_key(session, "\t");
+                controller_.send_key(session, VTERM_KEY_TAB);
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
-                controller_.send_raw_key(session, "\x1b[A");
+                controller_.send_key(session, VTERM_KEY_UP);
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
-                controller_.send_raw_key(session, "\x1b[B");
+                controller_.send_key(session, VTERM_KEY_DOWN);
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
-                controller_.send_raw_key(session, "\x1b[C");
+                controller_.send_key(session, VTERM_KEY_RIGHT);
             }
             else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
-                controller_.send_raw_key(session, "\x1b[D");
+                controller_.send_key(session, VTERM_KEY_LEFT);
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+                controller_.send_key(session, VTERM_KEY_DEL);
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
+                controller_.send_key(session, VTERM_KEY_HOME);
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_End)) {
+                controller_.send_key(session, VTERM_KEY_END);
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
+                controller_.send_key(session, VTERM_KEY_PAGEUP);
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
+                controller_.send_key(session, VTERM_KEY_PAGEDOWN);
             }
             else if (io.InputQueueCharacters.Size > 0) {
                 for (int i = 0; i < io.InputQueueCharacters.Size; ++i) {
                     ImWchar c = io.InputQueueCharacters[i];
                     if (c > 0) {
-                        char utf8[5] = {0};
-                        if (c < 0x80) {
-                            utf8[0] = static_cast<char>(c);
-                        } else if (c < 0x800) {
-                            utf8[0] = static_cast<char>(0xC0 | (c >> 6));
-                            utf8[1] = static_cast<char>(0x80 | (c & 0x3F));
-                        } else {
-                            utf8[0] = static_cast<char>(0xE0 | (c >> 12));
-                            utf8[1] = static_cast<char>(0x80 | ((c >> 6) & 0x3F));
-                            utf8[2] = static_cast<char>(0x80 | (c & 0x3F));
-                        }
-                        controller_.send_raw_key(session, utf8);
+                        controller_.send_char(session, static_cast<uint32_t>(c));
                     }
                 }
             }
         }
     }
     
-    ImGui::TextDisabled("Press keys to interact with terminal (Enter, Esc, numbers, letters...)");
+    ImGui::TextDisabled("Press keys to interact with terminal (Enter, Esc, arrows, letters...)");
 }
 
 }

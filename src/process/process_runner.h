@@ -13,6 +13,8 @@ struct ProcessConfig {
     std::string executable;
     std::vector<std::string> args;
     std::string working_dir;
+    int rows = 24;
+    int cols = 80;
 };
 
 using OutputCallback = std::function<void(const std::string& data, bool is_stderr)>;
@@ -31,6 +33,7 @@ public:
     void kill();
     
     bool write_stdin(const std::string& data);
+    void resize(int rows, int cols);
     
     bool is_running() const { return running_.load(); }
     pid_t pid() const { return pid_; }

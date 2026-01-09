@@ -249,4 +249,12 @@ void VTerminal::set_scrollback_callback(ScrollbackCallback cb) {
     scrollback_cb_ = std::move(cb);
 }
 
+void VTerminal::keyboard_key(int key) {
+    vterm_keyboard_key(impl_->vt, static_cast<VTermKey>(key), VTERM_MOD_NONE);
+}
+
+void VTerminal::keyboard_unichar(uint32_t c, int modifiers) {
+    vterm_keyboard_unichar(impl_->vt, c, static_cast<VTermModifier>(modifiers));
+}
+
 }
