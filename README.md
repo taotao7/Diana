@@ -8,7 +8,7 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 
 ## Features
 
-- Multi-tab terminal emulator for running AI agents
+- Multi-tab terminal emulator for running AI agents (VT100/xterm via libvterm)
 - Supports Claude Code, Codex, and OpenCode
 - Provider/model configuration switching with atomic file updates
 - Real-time token usage monitoring with charts
@@ -22,6 +22,8 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 | Claude Code | `~/.claude/settings.json` | JSON |
 | Codex | `~/.codex/config.toml` | TOML |
 | OpenCode | `~/.config/opencode/opencode.json` | JSONC |
+
+Providers/models can be entered directly in the configuration fields.
 
 ## Requirements
 
@@ -121,6 +123,10 @@ src/
     └── metrics_panel.h/cpp          # Token usage charts
 ```
 
+### Terminal Emulation
+
+The terminal panel uses **libvterm** to provide VT100/xterm-compatible emulation (escape sequences, cursor movement, and color handling).
+
 ### Data Flow
 
 ```
@@ -153,6 +159,9 @@ Fetched automatically:
 - [tomlplusplus](https://github.com/marzer/tomlplusplus) 3.4.0
 - [nativefiledialog-extended](https://github.com/btzy/nativefiledialog-extended) 1.2.1
 - [GoogleTest](https://github.com/google/googletest) 1.14.0 (tests only)
+
+Vendored:
+- libvterm (in `third_party/libvterm/`)
 
 ## License
 
