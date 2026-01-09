@@ -19,6 +19,11 @@ const char* APP_NAMES[] = { "Claude Code", "Codex", "OpenCode" };
 constexpr int APP_COUNT = 3;
 
 void utf8_encode(uint32_t codepoint, char* out, int* len) {
+    if (codepoint > 0x10FFFF) {
+        out[0] = '?';
+        *len = 1;
+        return;
+    }
     if (codepoint < 0x80) {
         out[0] = static_cast<char>(codepoint);
         *len = 1;
@@ -41,14 +46,19 @@ void utf8_encode(uint32_t codepoint, char* out, int* len) {
 }
 
 void cell_to_utf8(const uint32_t* chars, std::string& out) {
+    if (chars[0] == 0 || chars[0] > 0x10FFFF) {
+        out += ' ';
+        return;
+    }
     for (int i = 0; i < TERMINAL_MAX_CHARS_PER_CELL && chars[i] != 0; ++i) {
+        uint32_t cp = chars[i];
+        if (cp > 0x10FFFF) {
+            break;
+        }
         char utf8[5] = {0};
         int len;
-        utf8_encode(chars[i], utf8, &len);
+        utf8_encode(cp, utf8, &len);
         out.append(utf8, static_cast<size_t>(len));
-    }
-    if (out.empty()) {
-        out = " ";
     }
 }
 
@@ -437,44 +447,58 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
         ImGuiIO& io = ImGui::GetIO();
         
         if (ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows)) {
-            if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
-                controller_.send_key(session, VTERM_KEY_ENTER);
+            bool has_ime_input = false;
+            for (int i = 0; i < io.InputQueueCharacters.Size; ++i) {
+                if (io.InputQueueCharacters[i] >= 0x80) {
+                    has_ime_input = true;
+                    break;
+                }
             }
-            else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
-                controller_.send_key(session, VTERM_KEY_ESCAPE);
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
-                controller_.send_key(session, VTERM_KEY_BACKSPACE);
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_Tab)) {
-                controller_.send_key(session, VTERM_KEY_TAB);
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
-                controller_.send_key(session, VTERM_KEY_UP);
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
-                controller_.send_key(session, VTERM_KEY_DOWN);
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
-                controller_.send_key(session, VTERM_KEY_RIGHT);
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
-                controller_.send_key(session, VTERM_KEY_LEFT);
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
-                controller_.send_key(session, VTERM_KEY_DEL);
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
-                controller_.send_key(session, VTERM_KEY_HOME);
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_End)) {
-                controller_.send_key(session, VTERM_KEY_END);
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
-                controller_.send_key(session, VTERM_KEY_PAGEUP);
-            }
-            else if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
-                controller_.send_key(session, VTERM_KEY_PAGEDOWN);
+            
+            if (!has_ime_input) {
+                if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
+                    if (io.KeyShift) {
+                        controller_.send_char(session, '\n');
+                    } else {
+                        controller_.send_key(session, VTERM_KEY_ENTER);
+                    }
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                    controller_.send_key(session, VTERM_KEY_ESCAPE);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
+                    controller_.send_key(session, VTERM_KEY_BACKSPACE);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_Tab)) {
+                    controller_.send_key(session, VTERM_KEY_TAB);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+                    controller_.send_key(session, VTERM_KEY_UP);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+                    controller_.send_key(session, VTERM_KEY_DOWN);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+                    controller_.send_key(session, VTERM_KEY_RIGHT);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
+                    controller_.send_key(session, VTERM_KEY_LEFT);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+                    controller_.send_key(session, VTERM_KEY_DEL);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
+                    controller_.send_key(session, VTERM_KEY_HOME);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_End)) {
+                    controller_.send_key(session, VTERM_KEY_END);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
+                    controller_.send_key(session, VTERM_KEY_PAGEUP);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
+                    controller_.send_key(session, VTERM_KEY_PAGEDOWN);
+                }
             }
             
             for (int i = 0; i < io.InputQueueCharacters.Size; ++i) {

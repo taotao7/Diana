@@ -68,7 +68,31 @@ int main(int argc, char** argv) {
     font_config.OversampleH = 2;
     font_config.OversampleV = 1;
     
-    ImFont* font = io.Fonts->AddFontFromFileTTF("resources/fonts/unifont.otf", 16.0f, &font_config, io.Fonts->GetGlyphRangesChineseFull());
+    static const ImWchar ranges[] = {
+        0x0020, 0x00FF,
+        0x2000, 0x206F,
+        0x2100, 0x214F,
+        0x2190, 0x21FF,
+        0x2200, 0x22FF,
+        0x2300, 0x23FF,
+        0x2500, 0x257F,
+        0x2580, 0x259F,
+        0x25A0, 0x25FF,
+        0x2600, 0x26FF,
+        0x2700, 0x27BF,
+        0x2B00, 0x2BFF,
+        0x3000, 0x303F,
+        0x3040, 0x309F,
+        0x30A0, 0x30FF,
+        0x4E00, 0x9FFF,
+        0xF000, 0xF0FF,
+        0xFE00, 0xFE0F,
+        0xFF00, 0xFFEF,
+        0x1F300, 0x1F9FF,
+        0,
+    };
+    
+    ImFont* font = io.Fonts->AddFontFromFileTTF("resources/fonts/unifont.otf", 16.0f, &font_config, ranges);
     if (!font) {
         io.Fonts->AddFontDefault();
     }

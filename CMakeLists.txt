@@ -108,6 +108,8 @@ target_include_directories(imgui_lib PUBLIC
     ${imgui_SOURCE_DIR}/backends
 )
 
+target_compile_definitions(imgui_lib PUBLIC IMGUI_USE_WCHAR32)
+
 target_link_libraries(imgui_lib PUBLIC glfw)
 
 find_package(OpenGL REQUIRED)
