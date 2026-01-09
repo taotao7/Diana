@@ -56,6 +56,8 @@ struct Theme {
     // Terminal colors
     uint32_t terminal_bg;        // Terminal background
     uint32_t terminal_fg;        // Terminal foreground (default text)
+    uint32_t terminal_cursor;    // Terminal cursor color
+    uint32_t terminal_cursor_glow; // Terminal cursor glow color
     AnsiColors ansi;             // ANSI color palette
     
     // Button colors

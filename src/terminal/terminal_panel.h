@@ -4,8 +4,29 @@
 #include "process/session_controller.h"
 #include <vector>
 #include <memory>
+#include <unordered_map>
+
+struct ImVec2;
 
 namespace agent47 {
+
+struct CursorAnimation {
+    float current_x = 0.0f;
+    float current_y = 0.0f;
+    float target_x = 0.0f;
+    float target_y = 0.0f;
+    float velocity_x = 0.0f;
+    float velocity_y = 0.0f;
+    
+    static constexpr int TRAIL_LENGTH = 8;
+    float trail_x[TRAIL_LENGTH] = {};
+    float trail_y[TRAIL_LENGTH] = {};
+    float trail_alpha[TRAIL_LENGTH] = {};
+    int trail_head = 0;
+    float trail_timer = 0.0f;
+    
+    bool initialized = false;
+};
 
 class TerminalPanel {
 public:
@@ -29,6 +50,8 @@ private:
     void render_input_line(TerminalSession& session);
     void render_terminal_line(const TerminalCell* cells, int count);
     void render_screen_row(TerminalSession& session, int screen_row, float line_height);
+    void render_cursor(TerminalSession& session, float target_x, float target_y, float char_w, float char_h);
+    void render_banner();
     void handle_start_stop(TerminalSession& session);
     
     std::vector<std::unique_ptr<TerminalSession>> sessions_;
@@ -40,6 +63,8 @@ private:
     
     uint32_t renaming_session_id_ = 0;
     char rename_buffer_[128] = {};
+    
+    std::unordered_map<uint32_t, CursorAnimation> cursor_animations_;
 };
 
 }

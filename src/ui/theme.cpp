@@ -36,6 +36,8 @@ Theme get_dark_theme() {
     
     theme.terminal_bg      = hex_to_imgui(0x1a1d21);
     theme.terminal_fg      = hex_to_imgui(0xd4d4d4);
+    theme.terminal_cursor  = hex_to_imgui(0xffb86c);
+    theme.terminal_cursor_glow = hex_to_imgui(0xffb86c);
     
     theme.ansi.black         = hex_to_imgui(0x000000);
     theme.ansi.red           = hex_to_imgui(0xff5555);
@@ -97,6 +99,8 @@ Theme get_light_theme() {
     
     theme.terminal_bg      = hex_to_imgui(0xf5f0e8);
     theme.terminal_fg      = hex_to_imgui(0x2d2a27);
+    theme.terminal_cursor  = hex_to_imgui(0xd65d0e);
+    theme.terminal_cursor_glow = hex_to_imgui(0xd65d0e);
     
     theme.ansi.black         = hex_to_imgui(0x2d2a27);
     theme.ansi.red           = hex_to_imgui(0x9d0006);

@@ -6,6 +6,7 @@
 #include <nfd.h>
 #include <algorithm>
 #include <cstdlib>
+#include <cmath>
 
 extern "C" {
 #include <vterm_keycodes.h>
@@ -305,6 +306,30 @@ void TerminalPanel::handle_start_stop(TerminalSession& session) {
     }
 }
 
+void TerminalPanel::render_banner() {
+    const auto& theme = get_current_theme();
+    ImVec4 accent = u32_to_imvec4(theme.accent);
+    ImVec4 dim = u32_to_imvec4(theme.foreground_dim);
+    
+    ImGui::NewLine();
+    ImGui::NewLine();
+    ImGui::PushStyleColor(ImGuiCol_Text, accent);
+    ImGui::TextUnformatted("  DDDDDDD    IIII    AAA    NN    NN    AAA   ");
+    ImGui::TextUnformatted("  DD    DD    II    AA AA   NNN   NN   AA AA  ");
+    ImGui::TextUnformatted("  DD    DD    II   AA   AA  NNNN  NN  AA   AA ");
+    ImGui::TextUnformatted("  DD    DD    II  AAAAAAAAA NN NN NN AAAAAAAAA");
+    ImGui::TextUnformatted("  DD    DD    II  AA     AA NN  NNNN AA     AA");
+    ImGui::TextUnformatted("  DDDDDDD    IIII AA     AA NN   NNN AA     AA");
+    ImGui::PopStyleColor();
+    
+    ImGui::NewLine();
+    ImGui::PushStyleColor(ImGuiCol_Text, dim);
+    ImGui::TextUnformatted("           Your Agent's Best Handler");
+    ImGui::NewLine();
+    ImGui::TextUnformatted("      Select an agent and click Start to begin.");
+    ImGui::PopStyleColor();
+}
+
 void TerminalPanel::render_output_area(TerminalSession& session) {
     float footer_height = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
     
@@ -314,65 +339,188 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
     ImGui::PushStyleColor(ImGuiCol_ChildBg, term_bg);
     
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoNavInputs;
-    if (ImGui::BeginChild("OutputArea", ImVec2(0, -footer_height), true, flags)) {
-        ImVec2 char_size = ImGui::CalcTextSize("W");
-        ImVec2 content_size = ImGui::GetContentRegionAvail();
-        
-        int new_cols = std::max(1, static_cast<int>(content_size.x / char_size.x));
-        int new_rows = std::max(1, static_cast<int>(content_size.y / char_size.y));
-        
-        const auto& terminal = session.terminal();
-        if (new_cols != terminal.cols() || new_rows != terminal.rows()) {
-            controller_.resize_pty(session, new_rows, new_cols);
-        }
-        
-        const auto& scrollback = terminal.scrollback();
-        bool has_scrollback = !scrollback.empty();
-        
-        if (has_scrollback) {
-            int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
+    bool child_open = ImGui::BeginChild("OutputArea", ImVec2(0, -footer_height), true, flags);
+    ImGui::PopStyleVar();
+    if (child_open) {
+        if (session.state() == SessionState::Idle && session.terminal().scrollback().empty()) {
+            render_banner();
+        } else {
+            ImVec2 char_size = ImGui::CalcTextSize("W");
+            ImVec2 content_size = ImGui::GetContentRegionAvail();
             
-            ImGuiListClipper clipper;
-            clipper.Begin(total_lines);
+            int new_cols = std::max(1, static_cast<int>(content_size.x / char_size.x));
+            int new_rows = std::max(1, static_cast<int>(content_size.y / char_size.y));
             
-            while (clipper.Step()) {
-                for (int line_idx = clipper.DisplayStart; line_idx < clipper.DisplayEnd; ++line_idx) {
-                    bool is_scrollback = line_idx < static_cast<int>(scrollback.size());
-                    
-                    if (is_scrollback) {
-                        const auto& line = scrollback[static_cast<size_t>(line_idx)];
-                        render_terminal_line(line.data(), static_cast<int>(line.size()));
-                    } else {
-                        int screen_row = line_idx - static_cast<int>(scrollback.size());
-                        render_screen_row(session, screen_row, char_size.y);
+            const auto& terminal = session.terminal();
+            if (new_cols != terminal.cols() || new_rows != terminal.rows()) {
+                controller_.resize_pty(session, new_rows, new_cols);
+            }
+            
+            ImVec2 content_start = ImGui::GetCursorScreenPos();
+            
+            const auto& scrollback = terminal.scrollback();
+            bool has_scrollback = !scrollback.empty();
+            
+            if (has_scrollback) {
+                int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
+                float scroll_y = ImGui::GetScrollY();
+                
+                ImGuiListClipper clipper;
+                clipper.Begin(total_lines);
+                
+                while (clipper.Step()) {
+                    for (int line_idx = clipper.DisplayStart; line_idx < clipper.DisplayEnd; ++line_idx) {
+                        bool is_scrollback = line_idx < static_cast<int>(scrollback.size());
+                        
+                        if (is_scrollback) {
+                            const auto& line = scrollback[static_cast<size_t>(line_idx)];
+                            render_terminal_line(line.data(), static_cast<int>(line.size()));
+                        } else {
+                            int screen_row = line_idx - static_cast<int>(scrollback.size());
+                            render_screen_row(session, screen_row, char_size.y);
+                        }
                     }
                 }
-            }
-            
-            float scroll_y = ImGui::GetScrollY();
-            float scroll_max_y = ImGui::GetScrollMaxY();
-            bool at_bottom = (scroll_max_y <= 0.0f) || (scroll_y >= scroll_max_y - 1.0f);
-            
-            if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
-                session.set_user_scrolled_up(!at_bottom);
-            }
-            
-            if (at_bottom) {
-                session.set_user_scrolled_up(false);
-            }
-            
-            if (session.scroll_to_bottom()) {
-                ImGui::SetScrollHereY(1.0f);
-                session.set_scroll_to_bottom(false);
-            }
-        } else {
-            for (int row = 0; row < terminal.rows(); ++row) {
-                render_screen_row(session, row, char_size.y);
+                
+                float scroll_max_y = ImGui::GetScrollMaxY();
+                bool at_bottom = (scroll_max_y <= 0.0f) || (scroll_y >= scroll_max_y - 1.0f);
+                
+                if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
+                    session.set_user_scrolled_up(!at_bottom);
+                }
+                
+                if (at_bottom) {
+                    session.set_user_scrolled_up(false);
+                }
+                
+                if (session.scroll_to_bottom()) {
+                    ImGui::SetScrollHereY(1.0f);
+                    session.set_scroll_to_bottom(false);
+                }
+                
+                auto cursor = terminal.get_cursor();
+                int cursor_line_idx = static_cast<int>(scrollback.size()) + cursor.row;
+                float target_x = content_start.x + cursor.col * char_size.x;
+                float target_y = content_start.y + cursor_line_idx * char_size.y - scroll_y;
+                
+                ImVec2 clip_min = ImGui::GetWindowPos();
+                ImVec2 clip_max = ImVec2(clip_min.x + ImGui::GetWindowSize().x, clip_min.y + ImGui::GetWindowSize().y);
+                if (target_y >= clip_min.y - char_size.y && target_y <= clip_max.y) {
+                    render_cursor(session, target_x, target_y, char_size.x, char_size.y);
+                }
+            } else {
+                for (int row = 0; row < terminal.rows(); ++row) {
+                    render_screen_row(session, row, char_size.y);
+                }
+                
+                auto cursor = terminal.get_cursor();
+                float target_x = content_start.x + cursor.col * char_size.x;
+                float target_y = content_start.y + cursor.row * char_size.y;
+                render_cursor(session, target_x, target_y, char_size.x, char_size.y);
             }
         }
     }
     ImGui::EndChild();
     ImGui::PopStyleColor();
+}
+
+void TerminalPanel::render_cursor(TerminalSession& session, float target_x, float target_y, float char_w, float char_h) {
+    auto& anim = cursor_animations_[session.id()];
+    float dt = ImGui::GetIO().DeltaTime;
+    const auto& theme = get_current_theme();
+    
+    if (!anim.initialized) {
+        anim.current_x = target_x;
+        anim.current_y = target_y;
+        anim.target_x = target_x;
+        anim.target_y = target_y;
+        for (int i = 0; i < CursorAnimation::TRAIL_LENGTH; ++i) {
+            anim.trail_x[i] = target_x;
+            anim.trail_y[i] = target_y;
+            anim.trail_alpha[i] = 0.0f;
+        }
+        anim.initialized = true;
+    }
+    
+    anim.target_x = target_x;
+    anim.target_y = target_y;
+    
+    constexpr float SPRING_STIFFNESS = 35.0f;
+    constexpr float DAMPING = 8.0f;
+    
+    float dx = anim.target_x - anim.current_x;
+    float dy = anim.target_y - anim.current_y;
+    
+    float ax = dx * SPRING_STIFFNESS - anim.velocity_x * DAMPING;
+    float ay = dy * SPRING_STIFFNESS - anim.velocity_y * DAMPING;
+    
+    anim.velocity_x += ax * dt;
+    anim.velocity_y += ay * dt;
+    anim.current_x += anim.velocity_x * dt;
+    anim.current_y += anim.velocity_y * dt;
+    
+    float speed = std::sqrt(anim.velocity_x * anim.velocity_x + anim.velocity_y * anim.velocity_y);
+    
+    constexpr float TRAIL_INTERVAL = 0.012f;
+    anim.trail_timer += dt;
+    if (anim.trail_timer >= TRAIL_INTERVAL && speed > 5.0f) {
+        anim.trail_timer = 0.0f;
+        anim.trail_head = (anim.trail_head + 1) % CursorAnimation::TRAIL_LENGTH;
+        anim.trail_x[anim.trail_head] = anim.current_x;
+        anim.trail_y[anim.trail_head] = anim.current_y;
+        anim.trail_alpha[anim.trail_head] = std::min(1.0f, speed / 800.0f);
+    }
+    
+    for (int i = 0; i < CursorAnimation::TRAIL_LENGTH; ++i) {
+        anim.trail_alpha[i] *= (1.0f - dt * 8.0f);
+    }
+    
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    
+    uint8_t cursor_r = (theme.terminal_cursor >> 0) & 0xFF;
+    uint8_t cursor_g = (theme.terminal_cursor >> 8) & 0xFF;
+    uint8_t cursor_b = (theme.terminal_cursor >> 16) & 0xFF;
+    
+    for (int i = 0; i < CursorAnimation::TRAIL_LENGTH; ++i) {
+        int idx = (anim.trail_head - i + CursorAnimation::TRAIL_LENGTH) % CursorAnimation::TRAIL_LENGTH;
+        float alpha = anim.trail_alpha[idx];
+        if (alpha < 0.01f) continue;
+        
+        float size_factor = 1.0f - (static_cast<float>(i) / CursorAnimation::TRAIL_LENGTH) * 0.6f;
+        float trail_w = char_w * size_factor;
+        float trail_h = char_h * size_factor;
+        float offset_x = (char_w - trail_w) * 0.5f;
+        float offset_y = (char_h - trail_h) * 0.5f;
+        
+        ImU32 trail_color = IM_COL32(cursor_r, cursor_g, cursor_b, static_cast<int>(alpha * 100));
+        draw_list->AddRectFilled(
+            ImVec2(anim.trail_x[idx] + offset_x, anim.trail_y[idx] + offset_y),
+            ImVec2(anim.trail_x[idx] + offset_x + trail_w, anim.trail_y[idx] + offset_y + trail_h),
+            trail_color,
+            2.0f
+        );
+    }
+    
+    float blink = (std::sin(ImGui::GetTime() * 4.0f) + 1.0f) * 0.5f;
+    int base_alpha = 200 + static_cast<int>(blink * 55);
+    
+    ImU32 cursor_color = IM_COL32(cursor_r, cursor_g, cursor_b, base_alpha);
+    ImU32 glow_color = IM_COL32(cursor_r, cursor_g, cursor_b, static_cast<int>(base_alpha * 0.3f));
+    
+    draw_list->AddRectFilled(
+        ImVec2(anim.current_x - 1, anim.current_y - 1),
+        ImVec2(anim.current_x + char_w + 1, anim.current_y + char_h + 1),
+        glow_color,
+        3.0f
+    );
+    
+    draw_list->AddRectFilled(
+        ImVec2(anim.current_x, anim.current_y),
+        ImVec2(anim.current_x + char_w, anim.current_y + char_h),
+        cursor_color,
+        2.0f
+    );
 }
 
 void TerminalPanel::render_screen_row(TerminalSession& session, int screen_row, float line_height) {
@@ -386,21 +534,6 @@ void TerminalPanel::render_screen_row(TerminalSession& session, int screen_row, 
     }
     
     render_terminal_line(row_cells.data(), static_cast<int>(row_cells.size()));
-    
-    auto cursor = terminal.get_cursor();
-    if (cursor.visible && cursor.row == screen_row) {
-        ImVec2 char_size = ImGui::CalcTextSize("W");
-        ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
-        cursor_pos.x = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMin().x + cursor.col * char_size.x;
-        cursor_pos.y = ImGui::GetCursorScreenPos().y - line_height;
-        
-        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-        draw_list->AddRectFilled(
-            cursor_pos,
-            ImVec2(cursor_pos.x + char_size.x, cursor_pos.y + line_height),
-            IM_COL32(200, 200, 200, 128)
-        );
-    }
 }
 
 void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count) {
@@ -455,7 +588,51 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                 }
             }
             
-            if (!has_ime_input) {
+#if defined(__APPLE__)
+            bool ctrl_or_cmd = io.KeySuper;
+#else
+            bool ctrl_or_cmd = io.KeyCtrl;
+#endif
+            
+            if (io.KeyCtrl && !has_ime_input) {
+                if (ImGui::IsKeyPressed(ImGuiKey_C)) {
+                    controller_.send_raw_key(session, "\x03");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_D)) {
+                    controller_.send_raw_key(session, "\x04");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_Z)) {
+                    controller_.send_raw_key(session, "\x1a");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_L)) {
+                    controller_.send_raw_key(session, "\x0c");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_U)) {
+                    controller_.send_raw_key(session, "\x15");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_W)) {
+                    controller_.send_raw_key(session, "\x17");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_A)) {
+                    controller_.send_raw_key(session, "\x01");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_E)) {
+                    controller_.send_raw_key(session, "\x05");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_K)) {
+                    controller_.send_raw_key(session, "\x0b");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_R)) {
+                    controller_.send_raw_key(session, "\x12");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_P)) {
+                    controller_.send_raw_key(session, "\x10");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_N)) {
+                    controller_.send_raw_key(session, "\x0e");
+                }
+            }
+            else if (!has_ime_input) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
                     if (io.KeyShift) {
                         controller_.send_char(session, '\n');
@@ -501,10 +678,12 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                 }
             }
             
-            for (int i = 0; i < io.InputQueueCharacters.Size; ++i) {
-                ImWchar c = io.InputQueueCharacters[i];
-                if (c > 0 && c != 127) {
-                    controller_.send_char(session, static_cast<uint32_t>(c));
+            if (!io.KeyCtrl) {
+                for (int i = 0; i < io.InputQueueCharacters.Size; ++i) {
+                    ImWchar c = io.InputQueueCharacters[i];
+                    if (c > 0 && c != 127) {
+                        controller_.send_char(session, static_cast<uint32_t>(c));
+                    }
                 }
             }
         }
