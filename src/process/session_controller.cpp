@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include <cstring>
 
-namespace agent47 {
+namespace diana {
 
 namespace {
 

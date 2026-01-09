@@ -1,6 +1,6 @@
 #pragma once
 
-namespace agent47 {
+namespace diana {
 
 void render_dockspace(bool first_frame);
 

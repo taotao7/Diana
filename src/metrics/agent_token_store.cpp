@@ -6,7 +6,7 @@
 #include <iomanip>
 #include <sstream>
 
-namespace agent47 {
+namespace diana {
 
 std::string DailyTokenData::date_key() const {
     std::ostringstream oss;

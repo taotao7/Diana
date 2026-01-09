@@ -3,7 +3,7 @@
 #include <cstdint>
 #include <string>
 
-namespace agent47 {
+namespace diana {
 
 // ANSI terminal colors (0-7 normal, 8-15 bright)
 struct AnsiColors {

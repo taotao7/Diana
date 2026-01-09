@@ -8,7 +8,7 @@
 
 struct ImVec2;
 
-namespace agent47 {
+namespace diana {
 
 struct CursorAnimation {
     float current_x = 0.0f;
@@ -63,6 +63,8 @@ private:
     
     uint32_t renaming_session_id_ = 0;
     char rename_buffer_[128] = {};
+    
+    uint32_t confirm_start_session_id_ = 0;
     
     std::unordered_map<uint32_t, CursorAnimation> cursor_animations_;
 };

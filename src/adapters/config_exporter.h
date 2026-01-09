@@ -6,7 +6,7 @@
 #include <vector>
 #include <optional>
 
-namespace agent47 {
+namespace diana {
 
 struct ExportedConfig {
     std::string app_name;

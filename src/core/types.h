@@ -1,6 +1,6 @@
 #pragma once
 
-namespace agent47 {
+namespace diana {
 
 enum class AppKind {
     ClaudeCode,

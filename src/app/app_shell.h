@@ -7,7 +7,7 @@
 #include "adapters/claude_profile_store.h"
 #include <memory>
 
-namespace agent47 {
+namespace diana {
 
 class AppShell {
 public:

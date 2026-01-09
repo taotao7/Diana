@@ -3,7 +3,7 @@
 #include <algorithm>
 #include <map>
 
-namespace agent47 {
+namespace diana {
 
 AgentTokenPanel::AgentTokenPanel()
     : store_(std::make_unique<AgentTokenStore>())

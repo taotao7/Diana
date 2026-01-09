@@ -6,7 +6,7 @@
 #include <mutex>
 #include <string>
 
-namespace agent47 {
+namespace diana {
 
 struct TokenSample {
     std::chrono::steady_clock::time_point timestamp;

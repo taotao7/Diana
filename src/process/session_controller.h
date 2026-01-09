@@ -7,7 +7,7 @@
 #include <memory>
 #include <unordered_map>
 
-namespace agent47 {
+namespace diana {
 
 class SessionController {
 public:

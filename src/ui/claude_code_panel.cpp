@@ -2,7 +2,7 @@
 #include "theme.h"
 #include <cstring>
 
-namespace agent47 {
+namespace diana {
 
 ClaudeCodePanel::ClaudeCodePanel() {
     new_profile_name_.resize(64);

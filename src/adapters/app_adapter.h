@@ -4,7 +4,7 @@
 #include <optional>
 #include <vector>
 
-namespace agent47 {
+namespace diana {
 
 struct ProviderConfig {
     std::string provider;

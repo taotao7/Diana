@@ -6,7 +6,7 @@
 #include <cstdint>
 #include <memory>
 
-namespace agent47 {
+namespace diana {
 
 enum class SessionState {
     Idle,

@@ -6,6 +6,17 @@
 
 Diana is the ultimate mission control for your AI agents. Just as every Agent 47 needs a Diana, every LLM needs a handler to manage directives (configuration), monitor results (outputs), and keep the budget in check (token calculation).
 
+> [!IMPORTANT]
+> **Always select a project directory when starting an agent session.**
+>
+> Token metrics are tracked per project directory. Running multiple agents on the same project directory will cause conflicts and inaccurate metrics.
+>
+> **Best Practice:** Use `git worktree` to create separate directories for parallel work on the same repository:
+> ```bash
+> git worktree add ../my-project-feature feature-branch
+> ```
+> This way, each agent operates in its own directory with isolated token tracking.
+
 ## Features
 
 - Multi-tab terminal emulator for running AI agents (VT100/xterm via libvterm)

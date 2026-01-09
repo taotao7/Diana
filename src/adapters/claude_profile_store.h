@@ -6,7 +6,7 @@
 #include <optional>
 #include <functional>
 
-namespace agent47 {
+namespace diana {
 
 class ClaudeProfileStore {
 public:

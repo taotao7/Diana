@@ -4,7 +4,7 @@
 #include <chrono>
 #include <sys/stat.h>
 
-namespace agent47 {
+namespace diana {
 
 ClaudeProfileStore::ClaudeProfileStore() {
     const char* home = std::getenv("HOME");

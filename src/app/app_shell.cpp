@@ -4,7 +4,7 @@
 
 #include "imgui.h"
 
-namespace agent47 {
+namespace diana {
 
 void AppShell::init() {
     profile_store_ = std::make_unique<ClaudeProfileStore>();
@@ -17,6 +17,7 @@ void AppShell::init() {
     agent_token_panel_ = std::make_unique<AgentTokenPanel>();
     
     claude_code_panel_->set_profile_store(profile_store_.get());
+    metrics_panel_->set_terminal_panel(terminal_panel_.get());
 }
 
 void AppShell::render() {

@@ -1,7 +1,7 @@
 #include "claude_code_config.h"
 #include <chrono>
 
-namespace agent47 {
+namespace diana {
 
 void to_json(nlohmann::json& j, const ClaudeCodePermissions& p) {
     j = nlohmann::json::object();
@@ -176,15 +176,15 @@ nlohmann::json ClaudeCodeConfig::to_json() const {
     if (!env.empty()) j["env"] = env;
     
     nlohmann::json perm_json;
-    agent47::to_json(perm_json, permissions);
+    diana::to_json(perm_json, permissions);
     if (!perm_json.empty()) j["permissions"] = perm_json;
     
     nlohmann::json sandbox_json;
-    agent47::to_json(sandbox_json, sandbox);
+    diana::to_json(sandbox_json, sandbox);
     if (!sandbox_json.empty()) j["sandbox"] = sandbox_json;
     
     nlohmann::json attr_json;
-    agent47::to_json(attr_json, attribution);
+    diana::to_json(attr_json, attribution);
     if (!attr_json.empty()) j["attribution"] = attr_json;
     
     if (always_thinking_enabled) j["alwaysThinkingEnabled"] = always_thinking_enabled;

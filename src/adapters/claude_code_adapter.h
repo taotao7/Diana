@@ -3,7 +3,7 @@
 #include "app_adapter.h"
 #include <nlohmann/json.hpp>
 
-namespace agent47 {
+namespace diana {
 
 class ClaudeCodeAdapter : public IAppAdapter {
 public:

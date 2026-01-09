@@ -8,7 +8,7 @@
 #include <memory>
 #include <string>
 
-namespace agent47 {
+namespace diana {
 
 struct SwitchResult {
     bool success;

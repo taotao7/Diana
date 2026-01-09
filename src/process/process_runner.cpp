@@ -18,7 +18,7 @@
 #include <pty.h>
 #endif
 
-namespace agent47 {
+namespace diana {
 
 ProcessRunner::ProcessRunner() = default;
 

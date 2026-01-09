@@ -168,6 +168,7 @@ add_executable(diana
     src/ui/theme.cpp
     $<$<PLATFORM_ID:Darwin>:src/ui/theme_macos.mm>
     src/metrics/metrics_store.cpp
+    src/metrics/multi_metrics_store.cpp
     src/metrics/claude_usage_collector.cpp
     src/metrics/agent_token_store.cpp
 )

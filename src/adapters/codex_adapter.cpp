@@ -3,7 +3,7 @@
 #include <fstream>
 #include <cstdlib>
 
-namespace agent47 {
+namespace diana {
 
 std::string CodexAdapter::config_path() const {
     return get_config_dir();

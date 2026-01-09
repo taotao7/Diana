@@ -8,7 +8,7 @@
 #include <map>
 #include <vector>
 
-namespace agent47 {
+namespace diana {
 
 class AgentTokenPanel {
 public:

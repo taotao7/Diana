@@ -6,7 +6,7 @@
 #include <functional>
 #include <memory>
 
-namespace agent47 {
+namespace diana {
 
 constexpr int TERMINAL_MAX_CHARS_PER_CELL = 6;
 

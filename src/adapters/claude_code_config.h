@@ -6,7 +6,7 @@
 #include <optional>
 #include <nlohmann/json.hpp>
 
-namespace agent47 {
+namespace diana {
 
 struct ClaudeCodePermissions {
     std::vector<std::string> allow;

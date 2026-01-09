@@ -6,7 +6,7 @@
 
 extern "C" void diana_request_exit();
 
-namespace agent47 {
+namespace diana {
 
 void render_dockspace(bool first_frame) {
     static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;

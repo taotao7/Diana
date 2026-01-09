@@ -1,7 +1,7 @@
 #include "metrics/metrics_store.h"
 #include <algorithm>
 
-namespace agent47 {
+namespace diana {
 
 void MetricsStore::record_sample(const TokenSample& sample) {
     std::lock_guard<std::mutex> lock(mutex_);

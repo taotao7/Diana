@@ -1,6 +1,6 @@
 #include "terminal_session.h"
 
-namespace agent47 {
+namespace diana {
 
 namespace {
 constexpr int DEFAULT_ROWS = 24;

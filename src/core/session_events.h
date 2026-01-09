@@ -4,7 +4,7 @@
 #include <variant>
 #include <cstdint>
 
-namespace agent47 {
+namespace diana {
 
 struct OutputEvent {
     uint32_t session_id;

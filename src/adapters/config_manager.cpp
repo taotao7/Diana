@@ -1,6 +1,6 @@
 #include "config_manager.h"
 
-namespace agent47 {
+namespace diana {
 
 ConfigManager::ConfigManager()
     : claude_adapter_(std::make_unique<ClaudeCodeAdapter>())

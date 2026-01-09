@@ -14,7 +14,7 @@ extern "C" {
 
 extern "C" bool diana_is_ctrl_pressed();
 
-namespace agent47 {
+namespace diana {
 
 namespace {
 
@@ -160,6 +160,49 @@ void TerminalPanel::render() {
                 ImGui::EndTabBar();
             }
         }
+        
+        if (confirm_start_session_id_ != 0) {
+            ImGui::OpenPopup("Confirm Start##HomeDir");
+        }
+        
+        if (ImGui::BeginPopupModal("Confirm Start##HomeDir", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.0f, 1.0f), "Warning: No project directory selected!");
+            ImGui::Spacing();
+            ImGui::TextWrapped("The agent will run in your home directory. This is not recommended because:");
+            ImGui::BulletText("Token metrics will be mixed with other projects");
+            ImGui::BulletText("Multiple agents may conflict on the same directory");
+            ImGui::Spacing();
+            ImGui::TextWrapped("Consider selecting a specific project directory first.");
+            ImGui::Spacing();
+            
+            if (ImGui::Button("Select Directory", ImVec2(140, 0))) {
+                if (auto* session = find_session(confirm_start_session_id_)) {
+                    nfdchar_t* out_path = nullptr;
+                    nfdresult_t result = NFD_PickFolder(&out_path, nullptr);
+                    if (result == NFD_OKAY && out_path) {
+                        session->config().working_dir = out_path;
+                        NFD_FreePath(out_path);
+                        controller_.start_session(*session);
+                        confirm_start_session_id_ = 0;
+                        ImGui::CloseCurrentPopup();
+                    }
+                }
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Start Anyway", ImVec2(120, 0))) {
+                if (auto* session = find_session(confirm_start_session_id_)) {
+                    controller_.start_session(*session);
+                }
+                confirm_start_session_id_ = 0;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(80, 0))) {
+                confirm_start_session_id_ = 0;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
     }
     ImGui::End();
 }
@@ -279,7 +322,11 @@ void TerminalPanel::render_control_bar(TerminalSession& session) {
         }
     } else {
         if (ImGui::Button("Start")) {
-            controller_.start_session(session);
+            if (session.config().working_dir.empty()) {
+                confirm_start_session_id_ = session.id();
+            } else {
+                controller_.start_session(session);
+            }
         }
     }
     
@@ -753,7 +800,6 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
         }
     }
     
-    ImGui::TextDisabled("Press keys to interact with terminal (Enter, Esc, arrows, letters...)");
 }
 
 }

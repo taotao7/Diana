@@ -7,7 +7,7 @@
 #include <thread>
 #include <sys/types.h>
 
-namespace agent47 {
+namespace diana {
 
 struct ProcessConfig {
     std::string executable;

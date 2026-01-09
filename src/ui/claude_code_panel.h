@@ -4,7 +4,7 @@
 #include <imgui.h>
 #include <array>
 
-namespace agent47 {
+namespace diana {
 
 class ClaudeCodePanel {
 public:

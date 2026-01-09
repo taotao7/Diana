@@ -5,7 +5,7 @@
 #include <condition_variable>
 #include <optional>
 
-namespace agent47 {
+namespace diana {
 
 template<typename T>
 class EventQueue {

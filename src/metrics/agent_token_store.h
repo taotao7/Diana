@@ -9,7 +9,7 @@
 #include <vector>
 #include <filesystem>
 
-namespace agent47 {
+namespace diana {
 
 // Supported agent/app types
 enum class AgentType {

@@ -3,7 +3,7 @@
 #include <cstdlib>
 #include <sys/stat.h>
 
-namespace agent47 {
+namespace diana {
 
 std::string ClaudeCodeAdapter::config_path() const {
     return get_settings_path();

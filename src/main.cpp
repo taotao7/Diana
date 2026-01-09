@@ -71,7 +71,7 @@ int main(int argc, char** argv) {
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     ImGui::StyleColorsDark();
-    agent47::update_system_theme();
+    diana::update_system_theme();
 
     ImGuiStyle& style = ImGui::GetStyle();
     if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
@@ -116,13 +116,13 @@ int main(int argc, char** argv) {
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init(glsl_version);
 
-    agent47::AppShell app_shell;
+    diana::AppShell app_shell;
     app_shell.init();
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
         
-        agent47::update_system_theme();
+        diana::update_system_theme();
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplGlfw_NewFrame();

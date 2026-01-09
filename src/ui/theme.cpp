@@ -8,7 +8,7 @@ extern "C" bool diana_is_dark_mode();
 #endif
 #endif
 
-namespace agent47 {
+namespace diana {
 
 namespace {
     Theme g_current_theme;

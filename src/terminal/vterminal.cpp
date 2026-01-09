@@ -7,7 +7,7 @@ extern "C" {
 #include <cstring>
 #include <algorithm>
 
-namespace agent47 {
+namespace diana {
 
 uint32_t vterm_color_to_u32(const VTermScreen* screen, const VTermColor* color, uint32_t default_fg, uint32_t default_bg) {
     VTermColor rgb_color = *color;

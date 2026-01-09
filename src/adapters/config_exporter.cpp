@@ -5,7 +5,7 @@
 #include <iomanip>
 #include <sstream>
 
-namespace agent47 {
+namespace diana {
 
 std::string ConfigExporter::app_kind_to_string(AppKind kind) {
     switch (kind) {

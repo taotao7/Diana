@@ -2,7 +2,7 @@
 #include <fstream>
 #include <cstdlib>
 
-namespace agent47 {
+namespace diana {
 
 std::string OpenCodeAdapter::config_path() const {
     return get_config_path();
