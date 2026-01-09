@@ -68,30 +68,10 @@ int main(int argc, char** argv) {
     font_config.OversampleH = 2;
     font_config.OversampleV = 1;
     
-    static const ImWchar box_drawing_ranges[] = {
-        0x2500, 0x257F,
-        0x2580, 0x259F,
-        0x25A0, 0x25FF,
-        0x2700, 0x27BF,
-        0,
-    };
-    
-    ImVector<ImWchar> ranges;
-    ImFontGlyphRangesBuilder builder;
-    builder.AddRanges(io.Fonts->GetGlyphRangesDefault());
-    builder.AddRanges(io.Fonts->GetGlyphRangesChineseFull());
-    builder.AddRanges(box_drawing_ranges);
-    builder.BuildRanges(&ranges);
-    
-#if defined(__APPLE__)
-    const char* font_path = "/System/Library/Fonts/SFNSMono.ttf";
-    ImFont* font = io.Fonts->AddFontFromFileTTF(font_path, 14.0f, &font_config, ranges.Data);
+    ImFont* font = io.Fonts->AddFontFromFileTTF("resources/fonts/unifont.otf", 16.0f, &font_config, io.Fonts->GetGlyphRangesChineseFull());
     if (!font) {
         io.Fonts->AddFontDefault();
     }
-#else
-    io.Fonts->AddFontDefault();
-#endif
 
     const char* glsl_version = "#version 150";
     ImGui_ImplGlfw_InitForOpenGL(window, true);

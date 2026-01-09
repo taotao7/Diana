@@ -1,4 +1,5 @@
 #include "terminal_panel.h"
+#include "vterminal.h"
 #include "core/session_events.h"
 #include "ui/theme.h"
 #include <imgui.h>
@@ -16,11 +17,6 @@ namespace {
 
 const char* APP_NAMES[] = { "Claude Code", "Codex", "OpenCode" };
 constexpr int APP_COUNT = 3;
-
-uint32_t chars_to_utf8_codepoint(const uint32_t* chars) {
-    if (chars[0] == 0) return ' ';
-    return chars[0];
-}
 
 void utf8_encode(uint32_t codepoint, char* out, int* len) {
     if (codepoint < 0x80) {
@@ -41,6 +37,18 @@ void utf8_encode(uint32_t codepoint, char* out, int* len) {
         out[2] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
         out[3] = static_cast<char>(0x80 | (codepoint & 0x3F));
         *len = 4;
+    }
+}
+
+void cell_to_utf8(const uint32_t* chars, std::string& out) {
+    for (int i = 0; i < TERMINAL_MAX_CHARS_PER_CELL && chars[i] != 0; ++i) {
+        char utf8[5] = {0};
+        int len;
+        utf8_encode(chars[i], utf8, &len);
+        out.append(utf8, static_cast<size_t>(len));
+    }
+    if (out.empty()) {
+        out = " ";
     }
 }
 
@@ -415,11 +423,7 @@ void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count) {
             current_fg = cell.fg;
         }
         
-        uint32_t cp = chars_to_utf8_codepoint(cell.chars);
-        char utf8[5] = {0};
-        int len;
-        utf8_encode(cp, utf8, &len);
-        text.append(utf8, static_cast<size_t>(len));
+        cell_to_utf8(cell.chars, text);
     }
     
     flush_text();
@@ -472,12 +476,11 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
             else if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
                 controller_.send_key(session, VTERM_KEY_PAGEDOWN);
             }
-            else if (io.InputQueueCharacters.Size > 0) {
-                for (int i = 0; i < io.InputQueueCharacters.Size; ++i) {
-                    ImWchar c = io.InputQueueCharacters[i];
-                    if (c > 0) {
-                        controller_.send_char(session, static_cast<uint32_t>(c));
-                    }
+            
+            for (int i = 0; i < io.InputQueueCharacters.Size; ++i) {
+                ImWchar c = io.InputQueueCharacters[i];
+                if (c > 0 && c != 127) {
+                    controller_.send_char(session, static_cast<uint32_t>(c));
                 }
             }
         }

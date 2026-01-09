@@ -182,6 +182,11 @@ target_link_libraries(diana PRIVATE
 )
 
 # =============================================================================
+# Copy resources (fonts) to build directory
+# =============================================================================
+file(COPY ${CMAKE_SOURCE_DIR}/resources/fonts DESTINATION ${CMAKE_BINARY_DIR}/resources)
+
+# =============================================================================
 # Tests
 # =============================================================================
 if(DIANA_BUILD_TESTS)
