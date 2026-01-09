@@ -28,6 +28,7 @@ private:
     void render_output_area(TerminalSession& session);
     void render_input_line(TerminalSession& session);
     void render_terminal_line(const TerminalCell* cells, int count);
+    void render_screen_row(TerminalSession& session, int screen_row, float line_height);
     void handle_start_stop(TerminalSession& session);
     
     std::vector<std::unique_ptr<TerminalSession>> sessions_;

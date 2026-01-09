@@ -287,7 +287,9 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
     ImVec4 term_bg = u32_to_imvec4(theme.terminal_bg);
     
     ImGui::PushStyleColor(ImGuiCol_ChildBg, term_bg);
-    if (ImGui::BeginChild("OutputArea", ImVec2(0, -footer_height), true, ImGuiWindowFlags_HorizontalScrollbar)) {
+    
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoNavInputs;
+    if (ImGui::BeginChild("OutputArea", ImVec2(0, -footer_height), true, flags)) {
         ImVec2 char_size = ImGui::CalcTextSize("W");
         ImVec2 content_size = ImGui::GetContentRegionAvail();
         
@@ -300,68 +302,80 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
         }
         
         const auto& scrollback = terminal.scrollback();
+        bool has_scrollback = !scrollback.empty();
         
-        float line_height = char_size.y;
-        
-        int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
-        
-        ImGuiListClipper clipper;
-        clipper.Begin(total_lines);
-        
-        while (clipper.Step()) {
-            for (int line_idx = clipper.DisplayStart; line_idx < clipper.DisplayEnd; ++line_idx) {
-                bool is_scrollback = line_idx < static_cast<int>(scrollback.size());
-                
-                if (is_scrollback) {
-                    const auto& line = scrollback[static_cast<size_t>(line_idx)];
-                    render_terminal_line(line.data(), static_cast<int>(line.size()));
-                } else {
-                    int screen_row = line_idx - static_cast<int>(scrollback.size());
-                    std::vector<TerminalCell> row_cells;
-                    row_cells.reserve(static_cast<size_t>(terminal.cols()));
+        if (has_scrollback) {
+            int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
+            
+            ImGuiListClipper clipper;
+            clipper.Begin(total_lines);
+            
+            while (clipper.Step()) {
+                for (int line_idx = clipper.DisplayStart; line_idx < clipper.DisplayEnd; ++line_idx) {
+                    bool is_scrollback = line_idx < static_cast<int>(scrollback.size());
                     
-                    for (int col = 0; col < terminal.cols(); ++col) {
-                        row_cells.push_back(terminal.get_cell(screen_row, col));
-                    }
-                    
-                    render_terminal_line(row_cells.data(), static_cast<int>(row_cells.size()));
-                    
-                    auto cursor = terminal.get_cursor();
-                    if (cursor.visible && cursor.row == screen_row) {
-                        ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
-                        cursor_pos.x = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMin().x + cursor.col * char_size.x;
-                        cursor_pos.y = ImGui::GetCursorScreenPos().y - line_height;
-                        
-                        ImDrawList* draw_list = ImGui::GetWindowDrawList();
-                        draw_list->AddRectFilled(
-                            cursor_pos,
-                            ImVec2(cursor_pos.x + char_size.x, cursor_pos.y + line_height),
-                            IM_COL32(200, 200, 200, 128)
-                        );
+                    if (is_scrollback) {
+                        const auto& line = scrollback[static_cast<size_t>(line_idx)];
+                        render_terminal_line(line.data(), static_cast<int>(line.size()));
+                    } else {
+                        int screen_row = line_idx - static_cast<int>(scrollback.size());
+                        render_screen_row(session, screen_row, char_size.y);
                     }
                 }
             }
-        }
-        
-        float scroll_y = ImGui::GetScrollY();
-        float scroll_max_y = ImGui::GetScrollMaxY();
-        bool at_bottom = (scroll_max_y <= 0.0f) || (scroll_y >= scroll_max_y - 1.0f);
-        
-        if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
-            session.set_user_scrolled_up(!at_bottom);
-        }
-        
-        if (at_bottom) {
-            session.set_user_scrolled_up(false);
-        }
-        
-        if (session.scroll_to_bottom()) {
-            ImGui::SetScrollHereY(1.0f);
-            session.set_scroll_to_bottom(false);
+            
+            float scroll_y = ImGui::GetScrollY();
+            float scroll_max_y = ImGui::GetScrollMaxY();
+            bool at_bottom = (scroll_max_y <= 0.0f) || (scroll_y >= scroll_max_y - 1.0f);
+            
+            if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
+                session.set_user_scrolled_up(!at_bottom);
+            }
+            
+            if (at_bottom) {
+                session.set_user_scrolled_up(false);
+            }
+            
+            if (session.scroll_to_bottom()) {
+                ImGui::SetScrollHereY(1.0f);
+                session.set_scroll_to_bottom(false);
+            }
+        } else {
+            for (int row = 0; row < terminal.rows(); ++row) {
+                render_screen_row(session, row, char_size.y);
+            }
         }
     }
     ImGui::EndChild();
     ImGui::PopStyleColor();
+}
+
+void TerminalPanel::render_screen_row(TerminalSession& session, int screen_row, float line_height) {
+    const auto& terminal = session.terminal();
+    
+    std::vector<TerminalCell> row_cells;
+    row_cells.reserve(static_cast<size_t>(terminal.cols()));
+    
+    for (int col = 0; col < terminal.cols(); ++col) {
+        row_cells.push_back(terminal.get_cell(screen_row, col));
+    }
+    
+    render_terminal_line(row_cells.data(), static_cast<int>(row_cells.size()));
+    
+    auto cursor = terminal.get_cursor();
+    if (cursor.visible && cursor.row == screen_row) {
+        ImVec2 char_size = ImGui::CalcTextSize("W");
+        ImVec2 cursor_pos = ImGui::GetCursorScreenPos();
+        cursor_pos.x = ImGui::GetWindowPos().x + ImGui::GetWindowContentRegionMin().x + cursor.col * char_size.x;
+        cursor_pos.y = ImGui::GetCursorScreenPos().y - line_height;
+        
+        ImDrawList* draw_list = ImGui::GetWindowDrawList();
+        draw_list->AddRectFilled(
+            cursor_pos,
+            ImVec2(cursor_pos.x + char_size.x, cursor_pos.y + line_height),
+            IM_COL32(200, 200, 200, 128)
+        );
+    }
 }
 
 void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count) {
