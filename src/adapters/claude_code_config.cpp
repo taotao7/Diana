@@ -10,6 +10,7 @@ void to_json(nlohmann::json& j, const ClaudeCodePermissions& p) {
     if (!p.ask.empty()) j["ask"] = p.ask;
     if (!p.additional_directories.empty()) j["additionalDirectories"] = p.additional_directories;
     if (!p.default_mode.empty()) j["defaultMode"] = p.default_mode;
+    if (p.disable_bypass_permissions_mode) j["disableBypassPermissionsMode"] = p.disable_bypass_permissions_mode;
 }
 
 void from_json(const nlohmann::json& j, ClaudeCodePermissions& p) {
@@ -27,6 +28,9 @@ void from_json(const nlohmann::json& j, ClaudeCodePermissions& p) {
     }
     if (j.contains("defaultMode") && j["defaultMode"].is_string()) {
         p.default_mode = j["defaultMode"].get<std::string>();
+    }
+    if (j.contains("disableBypassPermissionsMode") && j["disableBypassPermissionsMode"].is_boolean()) {
+        p.disable_bypass_permissions_mode = j["disableBypassPermissionsMode"].get<bool>();
     }
 }
 

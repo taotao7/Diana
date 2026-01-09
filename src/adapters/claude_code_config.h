@@ -14,6 +14,7 @@ struct ClaudeCodePermissions {
     std::vector<std::string> ask;
     std::vector<std::string> additional_directories;
     std::string default_mode;
+    bool disable_bypass_permissions_mode = false;
 };
 
 struct ClaudeCodeSandbox {

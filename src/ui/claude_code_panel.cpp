@@ -240,6 +240,28 @@ void ClaudeCodePanel::render_basic_settings() {
         if (ImGui::Checkbox("Extended Thinking", &editing_config_.always_thinking_enabled)) {
             config_modified_ = true;
         }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Enable extended thinking for more thorough reasoning");
+        }
+        
+        const char* output_styles[] = { "", "Default", "Explanatory", "Learning" };
+        int style_idx = 0;
+        for (int i = 0; i < 4; ++i) {
+            if (editing_config_.output_style == output_styles[i]) {
+                style_idx = i;
+                break;
+            }
+        }
+        ImGui::Text("Output Style:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(120);
+        if (ImGui::Combo("##OutputStyle", &style_idx, output_styles, 4)) {
+            editing_config_.output_style = output_styles[style_idx];
+            config_modified_ = true;
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Default: Standard responses\nExplanatory: More detailed explanations\nLearning: Educational focus");
+        }
         
         char lang_buf[64];
         std::strncpy(lang_buf, editing_config_.language.c_str(), sizeof(lang_buf) - 1);
@@ -251,16 +273,8 @@ void ClaudeCodePanel::render_basic_settings() {
             editing_config_.language = lang_buf;
             config_modified_ = true;
         }
-        
-        char style_buf[64];
-        std::strncpy(style_buf, editing_config_.output_style.c_str(), sizeof(style_buf) - 1);
-        style_buf[sizeof(style_buf) - 1] = '\0';
-        ImGui::Text("Output Style:");
-        ImGui::SameLine();
-        ImGui::SetNextItemWidth(120);
-        if (ImGui::InputTextWithHint("##OutputStyle", "Explanatory", style_buf, sizeof(style_buf))) {
-            editing_config_.output_style = style_buf;
-            config_modified_ = true;
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Response language (e.g., english, japanese, spanish)");
         }
         
         ImGui::Unindent();
@@ -332,9 +346,9 @@ void ClaudeCodePanel::render_permissions_section() {
     if (ImGui::CollapsingHeader("Permissions")) {
         ImGui::Indent();
         
-        const char* modes[] = { "", "default", "acceptEdits", "bypassPermissions" };
+        const char* modes[] = { "", "default", "acceptEdits", "plan", "execute", "bypassPermissions" };
         int mode_idx = 0;
-        for (int i = 0; i < 4; ++i) {
+        for (int i = 0; i < 6; ++i) {
             if (editing_config_.permissions.default_mode == modes[i]) {
                 mode_idx = i;
                 break;
@@ -342,10 +356,17 @@ void ClaudeCodePanel::render_permissions_section() {
         }
         ImGui::Text("Default Mode:");
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(140);
-        if (ImGui::Combo("##DefaultMode", &mode_idx, modes, 4)) {
+        ImGui::SetNextItemWidth(150);
+        if (ImGui::Combo("##DefaultMode", &mode_idx, modes, 6)) {
             editing_config_.permissions.default_mode = modes[mode_idx];
             config_modified_ = true;
+        }
+        
+        if (ImGui::Checkbox("Disable Bypass Permissions Mode", &editing_config_.permissions.disable_bypass_permissions_mode)) {
+            config_modified_ = true;
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Prevent users from enabling bypass permissions mode");
         }
         
         render_string_list("Allow Rules", editing_config_.permissions.allow);
@@ -436,15 +457,37 @@ void ClaudeCodePanel::render_advanced_section() {
             editing_config_.api_key_helper = helper_buf;
             config_modified_ = true;
         }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Custom script/command to provide API key");
+        }
         
-        char login_buf[64];
-        std::strncpy(login_buf, editing_config_.force_login_method.c_str(), sizeof(login_buf) - 1);
-        login_buf[sizeof(login_buf) - 1] = '\0';
+        const char* login_methods[] = { "", "claudeai", "console" };
+        int login_idx = 0;
+        for (int i = 0; i < 3; ++i) {
+            if (editing_config_.force_login_method == login_methods[i]) {
+                login_idx = i;
+                break;
+            }
+        }
         ImGui::Text("Force Login:");
         ImGui::SameLine();
         ImGui::SetNextItemWidth(100);
-        if (ImGui::InputTextWithHint("##ForceLogin", "claudeai", login_buf, sizeof(login_buf))) {
-            editing_config_.force_login_method = login_buf;
+        if (ImGui::Combo("##ForceLogin", &login_idx, login_methods, 3)) {
+            editing_config_.force_login_method = login_methods[login_idx];
+            config_modified_ = true;
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("claudeai: Claude Pro login\nconsole: Anthropic Console login");
+        }
+        
+        char org_buf[128];
+        std::strncpy(org_buf, editing_config_.force_login_org_uuid.c_str(), sizeof(org_buf) - 1);
+        org_buf[sizeof(org_buf) - 1] = '\0';
+        ImGui::Text("Org UUID:");
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(200);
+        if (ImGui::InputTextWithHint("##OrgUUID", "Organization UUID", org_buf, sizeof(org_buf))) {
+            editing_config_.force_login_org_uuid = org_buf;
             config_modified_ = true;
         }
         
