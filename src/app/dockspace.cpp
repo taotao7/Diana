@@ -38,12 +38,12 @@ void render_dockspace(bool first_frame) {
             ImGui::DockBuilderAddNode(dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
             ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
 
-            ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.2f, nullptr, &dockspace_id);
+            ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.25f, nullptr, &dockspace_id);
             ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.25f, nullptr, &dockspace_id);
             ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.3f, nullptr, &dockspace_id);
             ImGuiID dock_id_center = dockspace_id;
 
-            ImGui::DockBuilderDockWindow("Profiles", dock_id_left);
+            ImGui::DockBuilderDockWindow("Claude Code", dock_id_left);
             ImGui::DockBuilderDockWindow("Terminal", dock_id_center);
             ImGui::DockBuilderDockWindow("Token Metrics", dock_id_right);
 
@@ -61,12 +61,12 @@ void render_dockspace(bool first_frame) {
         }
         if (ImGui::BeginMenu("View")) {
             if (ImGui::MenuItem("Terminal")) {}
-            if (ImGui::MenuItem("Profiles")) {}
+            if (ImGui::MenuItem("Claude Code")) {}
             if (ImGui::MenuItem("Token Metrics")) {}
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Help")) {
-            if (ImGui::MenuItem("About agent47")) {}
+            if (ImGui::MenuItem("About Diana")) {}
             ImGui::EndMenu();
         }
         ImGui::EndMenuBar();

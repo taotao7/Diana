@@ -1,5 +1,6 @@
 #pragma once
 
+#include "ansi_parser.h"
 #include <string>
 #include <vector>
 #include <deque>
@@ -14,8 +15,7 @@ enum class SegmentKind {
 };
 
 struct TerminalLine {
-    std::string text;
-    uint32_t color = 0xFFFFFFFF;
+    std::vector<ColoredSpan> spans;
     int64_t timestamp = 0;
 };
 
@@ -43,13 +43,14 @@ public:
 
 private:
     void trim_if_needed();
-    void flush_pending(uint32_t color);
+    void flush_pending();
 
     std::vector<Segment> segments_;
     size_t active_segment_idx_ = 0;
     size_t max_lines_per_segment_;
     size_t max_segments_;
     std::string pending_text_;
+    AnsiParser ansi_parser_;
 };
 
 }

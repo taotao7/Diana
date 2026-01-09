@@ -145,6 +145,7 @@ add_executable(diana
     src/main.cpp
     src/app/app_shell.cpp
     src/app/dockspace.cpp
+    src/terminal/ansi_parser.cpp
     src/terminal/terminal_buffer.cpp
     src/terminal/terminal_session.cpp
     src/terminal/terminal_panel.cpp
@@ -155,8 +156,10 @@ add_executable(diana
     src/adapters/opencode_adapter.cpp
     src/adapters/config_manager.cpp
     src/adapters/config_exporter.cpp
-    src/ui/profiles_panel.cpp
+    src/adapters/claude_code_config.cpp
+    src/adapters/profile_store.cpp
     src/ui/metrics_panel.cpp
+    src/ui/claude_code_panel.cpp
     src/metrics/metrics_store.cpp
     src/metrics/claude_usage_collector.cpp
 )

@@ -1,6 +1,5 @@
 #include "terminal_buffer.h"
 #include <chrono>
-#include <algorithm>
 
 namespace agent47 {
 
@@ -23,11 +22,13 @@ TerminalBuffer::TerminalBuffer(size_t max_lines_per_segment, size_t max_segments
 }
 
 void TerminalBuffer::append_line(const std::string& text, uint32_t color) {
-    flush_pending(color);
+    flush_pending();
 
     TerminalLine line;
-    line.text = text;
-    line.color = color;
+    line.spans = ansi_parser_.parse_line(text);
+    if (line.spans.size() == 1 && line.spans[0].color == 0xFFDCDCDC) {
+        line.spans[0].color = color;
+    }
     line.timestamp = current_timestamp_ms();
     segments_[active_segment_idx_].lines.push_back(std::move(line));
 
@@ -35,11 +36,12 @@ void TerminalBuffer::append_line(const std::string& text, uint32_t color) {
 }
 
 void TerminalBuffer::append_text(const std::string& text, uint32_t color) {
+    (void)color;
+    
     for (char c : text) {
         if (c == '\n') {
             TerminalLine line;
-            line.text = std::move(pending_text_);
-            line.color = color;
+            line.spans = ansi_parser_.parse_line(pending_text_);
             line.timestamp = current_timestamp_ms();
             segments_[active_segment_idx_].lines.push_back(std::move(line));
             pending_text_.clear();
@@ -52,7 +54,7 @@ void TerminalBuffer::append_text(const std::string& text, uint32_t color) {
 }
 
 void TerminalBuffer::new_segment(SegmentKind kind) {
-    flush_pending(0xFFFFFFFF);
+    flush_pending();
 
     Segment seg;
     seg.kind = kind;
@@ -63,14 +65,15 @@ void TerminalBuffer::new_segment(SegmentKind kind) {
         segments_.erase(segments_.begin());
         active_segment_idx_--;
     }
+    
+    ansi_parser_.reset();
 }
 
 void TerminalBuffer::add_restart_marker(const std::string& message) {
     new_segment(SegmentKind::RestartMarker);
     
     TerminalLine marker_line;
-    marker_line.text = "─── " + message + " ───";
-    marker_line.color = 0xFF88FFFF;
+    marker_line.spans.push_back({"\u2500\u2500\u2500 " + message + " \u2500\u2500\u2500", 0xFF88FFFF});
     marker_line.timestamp = current_timestamp_ms();
     segments_[active_segment_idx_].lines.push_back(std::move(marker_line));
     
@@ -80,6 +83,7 @@ void TerminalBuffer::add_restart_marker(const std::string& message) {
 void TerminalBuffer::clear_current_segment() {
     segments_[active_segment_idx_].lines.clear();
     pending_text_.clear();
+    ansi_parser_.reset();
 }
 
 size_t TerminalBuffer::total_line_count() const {
@@ -90,12 +94,11 @@ size_t TerminalBuffer::total_line_count() const {
     return total;
 }
 
-void TerminalBuffer::flush_pending(uint32_t color) {
+void TerminalBuffer::flush_pending() {
     if (pending_text_.empty()) return;
     
     TerminalLine line;
-    line.text = std::move(pending_text_);
-    line.color = color;
+    line.spans = ansi_parser_.parse_line(pending_text_);
     line.timestamp = current_timestamp_ms();
     segments_[active_segment_idx_].lines.push_back(std::move(line));
     pending_text_.clear();

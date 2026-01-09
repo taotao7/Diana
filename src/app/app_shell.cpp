@@ -6,11 +6,14 @@
 namespace agent47 {
 
 void AppShell::init() {
-    config_manager_ = std::make_unique<ConfigManager>();
+    profile_store_ = std::make_unique<ProfileStore>();
+    profile_store_->load();
+    
     terminal_panel_ = std::make_unique<TerminalPanel>();
-    profiles_panel_ = std::make_unique<ProfilesPanel>();
     metrics_panel_ = std::make_unique<MetricsPanel>();
-    profiles_panel_->set_config_manager(config_manager_.get());
+    claude_code_panel_ = std::make_unique<ClaudeCodePanel>();
+    
+    claude_code_panel_->set_profile_store(profile_store_.get());
 }
 
 void AppShell::render() {
@@ -18,8 +21,8 @@ void AppShell::render() {
     first_frame_ = false;
 
     terminal_panel_->render();
-    profiles_panel_->render();
     metrics_panel_->render();
+    claude_code_panel_->render();
 }
 
 void AppShell::shutdown() {

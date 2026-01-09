@@ -246,15 +246,23 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
         const auto& segments = session.buffer().segments();
         for (const auto& segment : segments) {
             for (const auto& line : segment.lines) {
-                ImVec4 color;
-                color.x = ((line.color >> 0) & 0xFF) / 255.0f;
-                color.y = ((line.color >> 8) & 0xFF) / 255.0f;
-                color.z = ((line.color >> 16) & 0xFF) / 255.0f;
-                color.w = ((line.color >> 24) & 0xFF) / 255.0f;
-                
-                ImGui::PushStyleColor(ImGuiCol_Text, color);
-                ImGui::TextUnformatted(line.text.c_str());
-                ImGui::PopStyleColor();
+                for (size_t i = 0; i < line.spans.size(); ++i) {
+                    const auto& span = line.spans[i];
+                    
+                    ImVec4 color;
+                    color.x = ((span.color >> 0) & 0xFF) / 255.0f;
+                    color.y = ((span.color >> 8) & 0xFF) / 255.0f;
+                    color.z = ((span.color >> 16) & 0xFF) / 255.0f;
+                    color.w = ((span.color >> 24) & 0xFF) / 255.0f;
+                    
+                    if (i > 0) {
+                        ImGui::SameLine(0.0f, 0.0f);
+                    }
+                    
+                    ImGui::PushStyleColor(ImGuiCol_Text, color);
+                    ImGui::TextUnformatted(span.text.c_str());
+                    ImGui::PopStyleColor();
+                }
             }
         }
         
