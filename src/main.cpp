@@ -16,6 +16,14 @@ static void glfw_error_callback(int error, const char* description) {
     fprintf(stderr, "GLFW Error %d: %s\n", error, description);
 }
 
+static GLFWwindow* g_main_window = nullptr;
+
+extern "C" bool diana_is_ctrl_pressed() {
+    if (!g_main_window) return false;
+    return glfwGetKey(g_main_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
+           glfwGetKey(g_main_window, GLFW_KEY_RIGHT_CONTROL) == GLFW_PRESS;
+}
+
 int main(int argc, char** argv) {
     (void)argc;
     (void)argv;
@@ -43,6 +51,7 @@ int main(int argc, char** argv) {
         glfwTerminate();
         return 1;
     }
+    g_main_window = window;
 
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
@@ -141,6 +150,7 @@ int main(int argc, char** argv) {
     ImGui::DestroyContext();
 
     glfwDestroyWindow(window);
+    g_main_window = nullptr;
     glfwTerminate();
 
     return 0;

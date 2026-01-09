@@ -12,6 +12,8 @@ extern "C" {
 #include <vterm_keycodes.h>
 }
 
+extern "C" bool diana_is_ctrl_pressed();
+
 namespace agent47 {
 
 namespace {
@@ -592,13 +594,9 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                 }
             }
             
-#if defined(__APPLE__)
-            bool ctrl_or_cmd = io.KeySuper;
-#else
-            bool ctrl_or_cmd = io.KeyCtrl;
-#endif
+            bool ctrl_pressed = diana_is_ctrl_pressed();
             
-            if (io.KeyCtrl && !has_ime_input) {
+            if (ctrl_pressed && !has_ime_input) {
                 if (ImGui::IsKeyPressed(ImGuiKey_C)) {
                     controller_.send_raw_key(session, "\x03");
                 }
@@ -634,6 +632,42 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                 }
                 else if (ImGui::IsKeyPressed(ImGuiKey_N)) {
                     controller_.send_raw_key(session, "\x0e");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_B)) {
+                    controller_.send_raw_key(session, "\x02");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_F)) {
+                    controller_.send_raw_key(session, "\x06");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_T)) {
+                    controller_.send_raw_key(session, "\x14");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_Y)) {
+                    controller_.send_raw_key(session, "\x19");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_H)) {
+                    controller_.send_raw_key(session, "\x08");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_J)) {
+                    controller_.send_raw_key(session, "\x0a");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_O)) {
+                    controller_.send_raw_key(session, "\x0f");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_G)) {
+                    controller_.send_raw_key(session, "\x07");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_Backslash)) {
+                    controller_.send_raw_key(session, "\x1c");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket)) {
+                    controller_.send_raw_key(session, "\x1b");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_RightBracket)) {
+                    controller_.send_raw_key(session, "\x1d");
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_Minus)) {
+                    controller_.send_raw_key(session, "\x1f");
                 }
             }
             else if (!has_ime_input) {
