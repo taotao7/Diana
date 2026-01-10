@@ -7,6 +7,9 @@
 Diana is the ultimate mission control for your AI agents. Just as every Agent 47 needs a Diana, every LLM needs a handler to manage directives (configuration), monitor results (outputs), and keep the budget in check (token calculation).
 
 > [!IMPORTANT]
+> **This project is under active development.** Currently only macOS is tested and supported. Other platforms (Linux, Windows) have not been tested.
+
+> [!IMPORTANT]
 > **Always select a project directory when starting an agent session.**
 >
 > Token metrics are tracked per project directory. Running multiple agents on the same project directory will cause conflicts and inaccurate metrics.
