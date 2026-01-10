@@ -211,8 +211,14 @@ if(DIANA_BUILD_TESTS)
         tests/test_main.cpp
         tests/core/test_event_queue.cpp
         tests/metrics/test_metrics_store.cpp
+        tests/metrics/test_multi_metrics_store.cpp
+        tests/metrics/test_agent_token_store.cpp
+        tests/metrics/test_claude_usage_collector.cpp
         tests/adapters/test_config_exporter.cpp
         src/metrics/metrics_store.cpp
+        src/metrics/multi_metrics_store.cpp
+        src/metrics/agent_token_store.cpp
+        src/metrics/claude_usage_collector.cpp
         src/adapters/config_exporter.cpp
     )
     

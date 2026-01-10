@@ -3,7 +3,7 @@
 #include <thread>
 
 TEST(MetricsStoreTest, RecordAndCount) {
-    agent47::MetricsStore store;
+    diana::MetricsStore store;
     
     EXPECT_EQ(store.sample_count(), 0);
     
@@ -15,7 +15,7 @@ TEST(MetricsStoreTest, RecordAndCount) {
 }
 
 TEST(MetricsStoreTest, ComputeStats) {
-    agent47::MetricsStore store;
+    diana::MetricsStore store;
     
     store.record_usage(100, 50, 0.01);
     store.record_usage(200, 100, 0.02);
@@ -29,7 +29,7 @@ TEST(MetricsStoreTest, ComputeStats) {
 }
 
 TEST(MetricsStoreTest, Clear) {
-    agent47::MetricsStore store;
+    diana::MetricsStore store;
     
     store.record_usage(100, 50, 0.01);
     store.record_usage(200, 100, 0.02);
@@ -44,7 +44,7 @@ TEST(MetricsStoreTest, Clear) {
 }
 
 TEST(MetricsStoreTest, RateHistory) {
-    agent47::MetricsStore store;
+    diana::MetricsStore store;
     
     store.record_usage(100, 50, 0.0);
     
@@ -58,7 +58,7 @@ TEST(MetricsStoreTest, RateHistory) {
 }
 
 TEST(MetricsStoreTest, ThreadSafety) {
-    agent47::MetricsStore store;
+    diana::MetricsStore store;
     const int num_records = 100;
     
     std::thread writer([&store, num_records]() {

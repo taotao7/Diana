@@ -4,7 +4,7 @@
 #include <string>
 
 TEST(EventQueueTest, PushAndTryPop) {
-    agent47::EventQueue<int> queue;
+    diana::EventQueue<int> queue;
     
     queue.push(42);
     queue.push(100);
@@ -22,7 +22,7 @@ TEST(EventQueueTest, PushAndTryPop) {
 }
 
 TEST(EventQueueTest, EmptyAndSize) {
-    agent47::EventQueue<std::string> queue;
+    diana::EventQueue<std::string> queue;
     
     EXPECT_TRUE(queue.empty());
     EXPECT_EQ(queue.size(), 0);
@@ -39,7 +39,7 @@ TEST(EventQueueTest, EmptyAndSize) {
 }
 
 TEST(EventQueueTest, Clear) {
-    agent47::EventQueue<int> queue;
+    diana::EventQueue<int> queue;
     
     queue.push(1);
     queue.push(2);
@@ -51,7 +51,7 @@ TEST(EventQueueTest, Clear) {
 }
 
 TEST(EventQueueTest, ThreadSafety) {
-    agent47::EventQueue<int> queue;
+    diana::EventQueue<int> queue;
     const int num_items = 1000;
     
     std::thread producer([&queue, num_items]() {
@@ -77,7 +77,7 @@ TEST(EventQueueTest, ThreadSafety) {
 }
 
 TEST(EventQueueTest, WaitPop) {
-    agent47::EventQueue<int> queue;
+    diana::EventQueue<int> queue;
     
     std::thread producer([&queue]() {
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
