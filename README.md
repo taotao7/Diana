@@ -23,8 +23,10 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 - Supports Claude Code, Codex, and OpenCode
 - Provider/model configuration switching with atomic file updates
 - Real-time token usage monitoring with charts
+- Per-project token metrics tracking
 - Config import/export for backup and sharing
 - Claude Code multi-profile configuration management
+- GitHub-style activity heatmap for token usage
 
 ## Supported Agents
 
@@ -36,10 +38,26 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 
 Providers/models can be entered directly in the configuration fields.
 
-## Example
+## Screenshots
+
 <img width="4330" height="2224" alt="image" src="https://github.com/user-attachments/assets/de4dcfea-fd5a-43b0-a7e4-bd77ffc2c96e" />
 <img width="4330" height="2224" alt="image" src="https://github.com/user-attachments/assets/5baa322c-8b91-4714-90ce-b240bff293ae" />
 
+## Technology Stack
+
+| Category | Technology | Purpose |
+|----------|------------|---------|
+| **Language** | C++17 | Core implementation |
+| **Build System** | CMake 3.20+ | Cross-platform build configuration |
+| **UI Framework** | [Dear ImGui](https://github.com/ocornut/imgui) (docking) | Immediate-mode GUI |
+| **Charting** | [ImPlot](https://github.com/epezent/implot) | Real-time data visualization |
+| **Windowing** | [GLFW](https://github.com/glfw/glfw) 3.4 | Cross-platform window/input |
+| **Graphics** | OpenGL 3.3+ | Hardware-accelerated rendering |
+| **Terminal** | libvterm | VT100/xterm emulation |
+| **JSON** | [nlohmann/json](https://github.com/nlohmann/json) 3.11.3 | Config parsing, JSONL processing |
+| **TOML** | [tomlplusplus](https://github.com/marzer/tomlplusplus) 3.4.0 | Codex config parsing |
+| **File Dialog** | [nativefiledialog-extended](https://github.com/btzy/nativefiledialog-extended) | Native OS file dialogs |
+| **Testing** | [GoogleTest](https://github.com/google/googletest) 1.14.0 | Unit testing framework |
 
 ## Requirements
 
@@ -48,7 +66,6 @@ Providers/models can be entered directly in the configuration fields.
 - CMake 3.20+
 
 ```bash
-# Install via Homebrew
 brew install cmake
 xcode-select --install
 ```
@@ -108,69 +125,171 @@ make -j8
 - Displays real-time rates (tok/sec, tok/min)
 - Shows cumulative totals and costs
 - Bar chart visualization of token rate over last 60 seconds
+- Per-session scope selector
 
 ### Agent Token Stats Panel (Right)
 - Aggregates token usage per agent type (Claude Code, Codex, OpenCode)
 - Scans `~/.claude/projects/` and `~/.claude/transcripts/` directories
 - Displays total tokens, cost, and token breakdown (input/output/cache)
 - Session list with subagent detection
-- Real-time rate chart (tokens/sec over last 60 seconds)
+- GitHub-style activity heatmap (last 365 days)
 
 ## Architecture
 
 ```
-src/
-├── main.cpp                         # Entry point, GLFW/OpenGL setup
-├── app/
-│   ├── app_shell.h/cpp              # Main application orchestrator
-│   └── dockspace.h/cpp              # ImGui docking layout
-├── core/
-│   ├── types.h                      # Shared enums (AppKind)
-│   ├── event_queue.h                # Thread-safe event queue
-│   └── session_events.h             # Event type definitions
-├── terminal/
-│   ├── vterminal.h/cpp              # libvterm wrapper for VT100/xterm emulation
-│   ├── terminal_session.h/cpp       # Per-tab session state
-│   └── terminal_panel.h/cpp         # Multi-tab terminal UI
-├── process/
-│   ├── process_runner.h/cpp         # PTY/fork process spawning (POSIX)
-│   └── session_controller.h/cpp     # Agent lifecycle management
-├── adapters/
-│   ├── app_adapter.h                # Abstract adapter interface
-│   ├── claude_code_adapter.h/cpp    # Claude Code settings.json adapter
-│   ├── claude_code_config.h/cpp     # Full Claude Code config struct
-│   ├── claude_profile_store.h/cpp   # Claude Code multi-profile CRUD
-│   ├── codex_adapter.h/cpp          # Codex config.toml adapter
-│   ├── opencode_adapter.h/cpp       # OpenCode config adapter
-│   ├── config_manager.h/cpp         # Unified config access
-│   └── config_exporter.h/cpp        # JSON export/import
-├── metrics/
-│   ├── metrics_store.h/cpp          # Token metrics aggregation
-│   ├── claude_usage_collector.h/cpp # JSONL file watcher
-│   └── agent_token_store.h/cpp      # Per-agent token aggregation
-└── ui/
-    ├── claude_code_panel.h/cpp      # Profile list + config editor UI
-    ├── metrics_panel.h/cpp          # Token usage charts
-    └── agent_token_panel.h/cpp      # Agent token stats panel
+diana/
+├── src/
+│   ├── main.cpp                      # Entry point, GLFW/OpenGL setup
+│   ├── app/
+│   │   ├── app_shell.h/cpp           # Main application orchestrator
+│   │   └── dockspace.h/cpp           # ImGui docking layout manager
+│   ├── core/
+│   │   ├── types.h                   # Shared enums (AppKind)
+│   │   ├── event_queue.h             # Thread-safe lock-free event queue
+│   │   └── session_events.h          # Event type definitions
+│   ├── terminal/
+│   │   ├── vterminal.h/cpp           # libvterm wrapper (VT100/xterm)
+│   │   ├── terminal_session.h/cpp    # Per-tab session state machine
+│   │   └── terminal_panel.h/cpp      # Multi-tab terminal UI
+│   ├── process/
+│   │   ├── process_runner.h/cpp      # PTY/fork process spawning (POSIX)
+│   │   └── session_controller.h/cpp  # Agent lifecycle management
+│   ├── adapters/
+│   │   ├── app_adapter.h             # Abstract adapter interface
+│   │   ├── claude_code_adapter.h/cpp # Claude Code settings.json
+│   │   ├── claude_code_config.h/cpp  # Full Claude Code config struct
+│   │   ├── claude_profile_store.h/cpp# Multi-profile CRUD operations
+│   │   ├── codex_adapter.h/cpp       # Codex config.toml
+│   │   ├── opencode_adapter.h/cpp    # OpenCode config adapter
+│   │   ├── config_manager.h/cpp      # Unified config access facade
+│   │   └── config_exporter.h/cpp     # JSON export/import utilities
+│   ├── metrics/
+│   │   ├── metrics_store.h/cpp       # Token metrics with EMA smoothing
+│   │   ├── multi_metrics_store.h/cpp # Per-project metrics hub
+│   │   ├── claude_usage_collector.h/cpp # JSONL file watcher
+│   │   └── agent_token_store.h/cpp   # Per-agent token aggregation
+│   └── ui/
+│       ├── theme.h/cpp               # Catppuccin theme + system detection
+│       ├── claude_code_panel.h/cpp   # Profile list + config editor
+│       ├── metrics_panel.h/cpp       # Real-time token charts
+│       └── agent_token_panel.h/cpp   # Agent stats + heatmap
+├── tests/
+│   ├── test_main.cpp
+│   ├── core/test_event_queue.cpp
+│   ├── metrics/
+│   │   ├── test_metrics_store.cpp
+│   │   ├── test_multi_metrics_store.cpp
+│   │   ├── test_agent_token_store.cpp
+│   │   └── test_claude_usage_collector.cpp
+│   └── adapters/test_config_exporter.cpp
+├── third_party/
+│   └── libvterm/                     # Vendored terminal emulation library
+└── resources/
+    └── fonts/unifont.otf             # Unicode font for text rendering
 ```
 
-### Terminal Emulation
+### Component Diagram
 
-The terminal panel uses **libvterm** to provide VT100/xterm-compatible emulation (escape sequences, cursor movement, and color handling).
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                            AppShell                                  │
+│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐ │
+│  │  ClaudeCodePanel │  │  TerminalPanel  │  │   MetricsPanel      │ │
+│  │  (Config Editor) │  │  (Multi-tab)    │  │   AgentTokenPanel   │ │
+│  └────────┬────────┘  └────────┬────────┘  └──────────┬──────────┘ │
+└───────────┼─────────────────────┼──────────────────────┼────────────┘
+            │                     │                      │
+            ▼                     ▼                      ▼
+┌───────────────────┐  ┌──────────────────┐  ┌─────────────────────────┐
+│  ProfileStore     │  │SessionController │  │  ClaudeUsageCollector   │
+│  ConfigManager    │  │  ProcessRunner   │  │  MultiMetricsStore      │
+│  ConfigExporter   │  │  VTerminal       │  │  AgentTokenStore        │
+└─────────┬─────────┘  └────────┬─────────┘  └───────────┬─────────────┘
+          │                     │                        │
+          ▼                     ▼                        ▼
+    ~/.claude/            PTY/fork               ~/.claude/projects/
+    settings.json         subprocess             *.jsonl files
+    diana_profiles.json
+```
 
 ### Data Flow
 
 ```
-User Input → TerminalPanel → SessionController → ProcessRunner (PTY)
-                                    ↓
-                              AppAdapter (config read/write)
-                                    ↓
-                              ~/.claude/settings.json
-                                    ↓
-                              ProfileStore (multi-profile management)
-                                    ↓
-                              ~/.claude/diana_profiles.json
+                    ┌─────────────────┐
+                    │   User Input    │
+                    └────────┬────────┘
+                             │
+                             ▼
+┌────────────────────────────────────────────────────────────┐
+│                     TerminalPanel                          │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                │
+│  │  Tab 1   │  │  Tab 2   │  │  Tab N   │                │
+│  │ Session  │  │ Session  │  │ Session  │                │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘                │
+└───────┼─────────────┼─────────────┼────────────────────────┘
+        │             │             │
+        └─────────────┼─────────────┘
+                      ▼
+            ┌─────────────────┐
+            │SessionController│
+            └────────┬────────┘
+                     │
+        ┌────────────┼────────────┐
+        ▼            ▼            ▼
+┌───────────┐ ┌───────────┐ ┌───────────┐
+│ProcessRun │ │ VTerminal │ │ AppAdapter│
+│   (PTY)   │ │ (libvterm)│ │  (config) │
+└─────┬─────┘ └─────┬─────┘ └─────┬─────┘
+      │             │             │
+      ▼             ▼             ▼
+   Agent         Screen       Config
+   Process       Buffer       Files
 ```
+
+### Metrics Collection Flow
+
+```
+~/.claude/projects/**/*.jsonl
+~/.claude/transcripts/**/*.jsonl
+            │
+            ▼
+┌─────────────────────────┐
+│  ClaudeUsageCollector   │  (polls every 5s, incremental parsing)
+└───────────┬─────────────┘
+            │
+    ┌───────┴───────┐
+    ▼               ▼
+┌─────────┐  ┌────────────────┐
+│Metrics  │  │MultiMetricsStore│  (per-project aggregation)
+│Store    │  └───────┬────────┘
+└────┬────┘          │
+     │               │
+     ▼               ▼
+┌─────────────┐ ┌─────────────────┐
+│MetricsPanel │ │ AgentTokenPanel │
+│(rate charts)│ │ (heatmap, stats)│
+└─────────────┘ └─────────────────┘
+```
+
+## Testing
+
+The project includes 47 unit tests covering core functionality:
+
+```bash
+./diana_tests
+```
+
+| Test Suite | Tests | Coverage |
+|------------|-------|----------|
+| EventQueueTest | 5 | Thread-safe queue operations |
+| MetricsStoreTest | 5 | Token aggregation, EMA rates |
+| MultiMetricsStoreTest | 7 | Per-project storage |
+| AgentTokenStoreTest | 10 | JSONL parsing, session tracking |
+| ClaudeUsageCollectorTest | 12 | File watching, incremental parsing |
+| ConfigExporterTest | 5 | JSON export/import |
+| AgentTokenUsageTest | 1 | Token calculation |
+| DailyTokenDataTest | 1 | Date formatting |
+| AgentTypeNameTest | 1 | Enum to string |
 
 ## Roadmap
 
@@ -178,21 +297,27 @@ User Input → TerminalPanel → SessionController → ProcessRunner (PTY)
 - [ ] OpenCode configuration panel (similar to Claude Code)
 - [ ] Codex configuration panel (similar to Claude Code)
 - [x] Agent token stats panel with per-agent aggregation
+- [x] Per-project token metrics tracking
+- [x] GitHub-style activity heatmap
 - [ ] Session history and replay
+- [ ] Cost estimation and budget alerts
 
 ## Dependencies
 
-Fetched automatically:
-- [Dear ImGui](https://github.com/ocornut/imgui) (docking branch)
-- [GLFW](https://github.com/glfw/glfw) 3.4
-- [ImPlot](https://github.com/epezent/implot)
-- [nlohmann/json](https://github.com/nlohmann/json) 3.11.3
-- [tomlplusplus](https://github.com/marzer/tomlplusplus) 3.4.0
-- [nativefiledialog-extended](https://github.com/btzy/nativefiledialog-extended) 1.2.1
-- [GoogleTest](https://github.com/google/googletest) 1.14.0 (tests only)
+All dependencies are fetched automatically via CMake FetchContent:
+
+| Dependency | Version | Purpose |
+|------------|---------|---------|
+| Dear ImGui | docking branch | Immediate-mode GUI framework |
+| GLFW | 3.4 | Cross-platform windowing |
+| ImPlot | master | Real-time plotting |
+| nlohmann/json | 3.11.3 | JSON/JSONL parsing |
+| tomlplusplus | 3.4.0 | TOML config parsing |
+| nativefiledialog-extended | 1.2.1 | Native file dialogs |
+| GoogleTest | 1.14.0 | Unit testing (optional) |
 
 Vendored:
-- libvterm (in `third_party/libvterm/`)
+- **libvterm** (in `third_party/libvterm/`) - Terminal emulation
 
 ## Font
 
