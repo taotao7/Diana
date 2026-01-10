@@ -298,6 +298,58 @@ TEST(OpenCodeConfigTest, ExtraFieldsPreserved) {
     EXPECT_EQ(output["another_unknown"], 42);
 }
 
+TEST(OpenCodeConfigTest, ProviderModelsWithComplexStructure) {
+    nlohmann::json j = {
+        {"$schema", "https://opencode.ai/config.json"},
+        {"plugin", {"oh-my-opencode", "opencode-antigravity-auth@beta"}},
+        {"provider", {
+            {"google", {
+                {"models", {
+                    {"antigravity-gemini-3-pro", {
+                        {"name", "Gemini 3 Pro (Antigravity)"},
+                        {"limit", {{"context", 1048576}, {"output", 65535}}},
+                        {"modalities", {
+                            {"input", {"text", "image", "pdf"}},
+                            {"output", {"text"}}
+                        }},
+                        {"variants", {
+                            {"low", {{"thinkingLevel", "low"}}},
+                            {"high", {{"thinkingLevel", "high"}}}
+                        }}
+                    }}
+                }}
+            }}
+        }}
+    };
+    
+    auto config = OpenCodeConfig::from_json(j);
+    auto output = config.to_json();
+    
+    ASSERT_TRUE(output.contains("plugin"));
+    ASSERT_EQ(output["plugin"].size(), 2);
+    EXPECT_EQ(output["plugin"][0], "oh-my-opencode");
+    
+    ASSERT_TRUE(output.contains("provider"));
+    ASSERT_TRUE(output["provider"].contains("google"));
+    ASSERT_TRUE(output["provider"]["google"].contains("models"));
+    
+    auto& models = output["provider"]["google"]["models"];
+    ASSERT_TRUE(models.contains("antigravity-gemini-3-pro"));
+    
+    auto& model = models["antigravity-gemini-3-pro"];
+    EXPECT_EQ(model["name"], "Gemini 3 Pro (Antigravity)");
+    EXPECT_EQ(model["limit"]["context"], 1048576);
+    EXPECT_EQ(model["limit"]["output"], 65535);
+    
+    ASSERT_TRUE(model.contains("modalities"));
+    EXPECT_EQ(model["modalities"]["input"].size(), 3);
+    EXPECT_EQ(model["modalities"]["output"][0], "text");
+    
+    ASSERT_TRUE(model.contains("variants"));
+    EXPECT_EQ(model["variants"]["low"]["thinkingLevel"], "low");
+    EXPECT_EQ(model["variants"]["high"]["thinkingLevel"], "high");
+}
+
 TEST(OpenCodeProfileTest, Serialization) {
     OpenCodeProfile profile;
     profile.name = "test-profile";
@@ -317,4 +369,99 @@ TEST(OpenCodeProfileTest, Serialization) {
     EXPECT_EQ(restored.config.model, "anthropic/claude-sonnet-4-20250514");
     EXPECT_EQ(restored.created_at, 1234567890);
     EXPECT_EQ(restored.updated_at, 1234567900);
+}
+
+TEST(OpenCodeConfigTest, EmptyFieldsNotWritten) {
+    OpenCodeConfig config;
+    config.model = "test-model";
+    
+    auto j = config.to_json();
+    
+    EXPECT_TRUE(j.contains("model"));
+    EXPECT_FALSE(j.contains("small_model"));
+    EXPECT_FALSE(j.contains("theme"));
+    EXPECT_FALSE(j.contains("default_agent"));
+    EXPECT_FALSE(j.contains("provider"));
+    EXPECT_FALSE(j.contains("agent"));
+    EXPECT_FALSE(j.contains("permission"));
+    EXPECT_FALSE(j.contains("tools"));
+    EXPECT_FALSE(j.contains("instructions"));
+    EXPECT_FALSE(j.contains("tui"));
+    EXPECT_FALSE(j.contains("compaction"));
+    EXPECT_FALSE(j.contains("watcher"));
+    EXPECT_FALSE(j.contains("mcp"));
+    EXPECT_FALSE(j.contains("share"));
+    EXPECT_FALSE(j.contains("autoupdate"));
+    EXPECT_FALSE(j.contains("disabled_providers"));
+    EXPECT_FALSE(j.contains("enabled_providers"));
+}
+
+TEST(OpenCodeConfigTest, EmptyProviderNotWritten) {
+    OpenCodeConfig config;
+    config.model = "test-model";
+    
+    OpenCodeProviderConfig empty_provider;
+    empty_provider.id = "empty";
+    config.providers["empty"] = empty_provider;
+    
+    auto j = config.to_json();
+    
+    EXPECT_FALSE(j.contains("provider"));
+}
+
+TEST(OpenCodeConfigTest, EmptyAgentNotWritten) {
+    OpenCodeConfig config;
+    config.model = "test-model";
+    
+    OpenCodeAgentConfig empty_agent;
+    config.agents["empty"] = empty_agent;
+    
+    auto j = config.to_json();
+    
+    EXPECT_FALSE(j.contains("agent"));
+}
+
+TEST(OpenCodeConfigTest, DefaultPermissionsNotWritten) {
+    OpenCodeConfig config;
+    config.model = "test-model";
+    
+    auto j = config.to_json();
+    
+    EXPECT_FALSE(j.contains("permissions"));
+}
+
+TEST(OpenCodeConfigTest, NonDefaultPermissionsWritten) {
+    OpenCodePermissions p;
+    p.auto_approve_writes = true;
+    
+    nlohmann::json j;
+    to_json(j, p);
+    
+    EXPECT_TRUE(j.contains("autoApproveWrites"));
+    EXPECT_TRUE(j["autoApproveWrites"].get<bool>());
+    EXPECT_FALSE(j.contains("autoApproveReads"));
+    EXPECT_FALSE(j.contains("autoApproveCommands"));
+}
+
+TEST(OpenCodeConfigTest, DefaultCompactionNotWritten) {
+    OpenCodeCompactionConfig c;
+    
+    nlohmann::json j;
+    to_json(j, c);
+    
+    EXPECT_TRUE(j.empty());
+}
+
+TEST(OpenCodeConfigTest, NonDefaultCompactionWritten) {
+    OpenCodeCompactionConfig c;
+    c.auto_compact = false;
+    c.prune = false;
+    
+    nlohmann::json j;
+    to_json(j, c);
+    
+    EXPECT_TRUE(j.contains("auto"));
+    EXPECT_TRUE(j.contains("prune"));
+    EXPECT_FALSE(j["auto"].get<bool>());
+    EXPECT_FALSE(j["prune"].get<bool>());
 }

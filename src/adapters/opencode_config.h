@@ -90,6 +90,8 @@ struct OpenCodeConfig {
     
     nlohmann::json experimental;
     
+    std::vector<std::string> plugins;
+    
     nlohmann::json extra_fields;
     
     static OpenCodeConfig from_json(const nlohmann::json& j);

@@ -338,6 +338,201 @@ void OpenCodePanel::render_providers_section() {
                     config_modified_ = true;
                 }
                 
+                if (!provider.models.empty()) {
+                    if (ImGui::TreeNode("Models")) {
+                        std::vector<std::string> models_to_delete;
+                        for (auto& [model_id, model_config] : provider.models) {
+                            ImGui::PushID(model_id.c_str());
+                            
+                            bool model_open = ImGui::TreeNode(model_id.c_str());
+                            ImGui::SameLine(ImGui::GetContentRegionAvail().x - 20);
+                            if (ImGui::SmallButton("X")) {
+                                models_to_delete.push_back(model_id);
+                            }
+                            
+                            if (model_open) {
+                                if (!model_config.is_object()) {
+                                    model_config = nlohmann::json::object();
+                                }
+                                
+                                char name_buf[256] = {0};
+                                if (model_config.contains("name") && model_config["name"].is_string()) {
+                                    std::strncpy(name_buf, model_config["name"].get<std::string>().c_str(), sizeof(name_buf) - 1);
+                                }
+                                ImGui::Text("Name:");
+                                ImGui::SameLine();
+                                ImGui::SetNextItemWidth(250);
+                                if (ImGui::InputText("##modelname", name_buf, sizeof(name_buf))) {
+                                    model_config["name"] = name_buf;
+                                    config_modified_ = true;
+                                }
+                                
+                                if (!model_config.contains("limit") || !model_config["limit"].is_object()) {
+                                    model_config["limit"] = nlohmann::json::object();
+                                }
+                                auto& limit = model_config["limit"];
+                                
+                                int context_limit = limit.value("context", 0);
+                                ImGui::Text("Context Limit:");
+                                ImGui::SameLine();
+                                ImGui::SetNextItemWidth(120);
+                                if (ImGui::InputInt("##contextlimit", &context_limit, 1000, 10000)) {
+                                    limit["context"] = context_limit;
+                                    config_modified_ = true;
+                                }
+                                
+                                int output_limit = limit.value("output", 0);
+                                ImGui::Text("Output Limit:");
+                                ImGui::SameLine();
+                                ImGui::SetNextItemWidth(120);
+                                if (ImGui::InputInt("##outputlimit", &output_limit, 1000, 10000)) {
+                                    limit["output"] = output_limit;
+                                    config_modified_ = true;
+                                }
+                                
+                                if (!model_config.contains("modalities") || !model_config["modalities"].is_object()) {
+                                    model_config["modalities"] = nlohmann::json::object({{"input", nlohmann::json::array()}, {"output", nlohmann::json::array()}});
+                                }
+                                auto& modalities = model_config["modalities"];
+                                
+                                if (ImGui::TreeNode("Modalities")) {
+                                    auto render_modality_list = [&](const char* label, const char* key) {
+                                        ImGui::PushID(key);
+                                        if (!modalities.contains(key) || !modalities[key].is_array()) {
+                                            modalities[key] = nlohmann::json::array();
+                                        }
+                                        auto& arr = modalities[key];
+                                        
+                                        ImGui::Text("%s:", label);
+                                        std::vector<size_t> to_remove;
+                                        for (size_t i = 0; i < arr.size(); ++i) {
+                                            ImGui::PushID(static_cast<int>(i));
+                                            std::string val = arr[i].is_string() ? arr[i].get<std::string>() : "";
+                                            char buf[64] = {0};
+                                            std::strncpy(buf, val.c_str(), sizeof(buf) - 1);
+                                            ImGui::SetNextItemWidth(100);
+                                            if (ImGui::InputText("##val", buf, sizeof(buf))) {
+                                                arr[i] = buf;
+                                                config_modified_ = true;
+                                            }
+                                            ImGui::SameLine();
+                                            if (ImGui::SmallButton("X")) {
+                                                to_remove.push_back(i);
+                                            }
+                                            ImGui::PopID();
+                                        }
+                                        for (auto it = to_remove.rbegin(); it != to_remove.rend(); ++it) {
+                                            arr.erase(arr.begin() + static_cast<long>(*it));
+                                            config_modified_ = true;
+                                        }
+                                        ImGui::SameLine();
+                                        if (ImGui::SmallButton("+")) {
+                                            arr.push_back("text");
+                                            config_modified_ = true;
+                                        }
+                                        ImGui::PopID();
+                                    };
+                                    
+                                    render_modality_list("Input", "input");
+                                    render_modality_list("Output", "output");
+                                    ImGui::TreePop();
+                                }
+                                
+                                if (ImGui::TreeNode("Variants")) {
+                                    if (!model_config.contains("variants") || !model_config["variants"].is_object()) {
+                                        model_config["variants"] = nlohmann::json::object();
+                                    }
+                                    auto& variants = model_config["variants"];
+                                    
+                                    std::vector<std::string> variants_to_delete;
+                                    for (auto& [var_key, var_val] : variants.items()) {
+                                        ImGui::PushID(var_key.c_str());
+                                        
+                                        bool var_open = ImGui::TreeNode(var_key.c_str());
+                                        ImGui::SameLine(ImGui::GetContentRegionAvail().x - 20);
+                                        if (ImGui::SmallButton("X")) {
+                                            variants_to_delete.push_back(var_key);
+                                        }
+                                        
+                                        if (var_open) {
+                                            if (!var_val.is_object()) var_val = nlohmann::json::object();
+                                            
+                                            if (!var_val.contains("thinkingConfig") || !var_val["thinkingConfig"].is_object()) {
+                                                var_val["thinkingConfig"] = nlohmann::json::object();
+                                            }
+                                            auto& thinking = var_val["thinkingConfig"];
+                                            
+                                            int budget = thinking.value("thinkingBudget", 0);
+                                            ImGui::Text("Thinking Budget:");
+                                            ImGui::SameLine();
+                                            ImGui::SetNextItemWidth(120);
+                                            if (ImGui::InputInt("##budget", &budget, 1000, 10000)) {
+                                                thinking["thinkingBudget"] = budget;
+                                                config_modified_ = true;
+                                            }
+                                            
+                                            ImGui::TreePop();
+                                        }
+                                        ImGui::PopID();
+                                    }
+                                    
+                                    for (const auto& vk : variants_to_delete) {
+                                        variants.erase(vk);
+                                        config_modified_ = true;
+                                    }
+                                    
+                                    ImGui::Separator();
+                                    static char new_variant_name[64] = {0};
+                                    ImGui::SetNextItemWidth(100);
+                                    ImGui::InputTextWithHint("##newvariant", "low/max", new_variant_name, sizeof(new_variant_name));
+                                    ImGui::SameLine();
+                                    bool can_add_var = new_variant_name[0] != '\0' && !variants.contains(new_variant_name);
+                                    ImGui::BeginDisabled(!can_add_var);
+                                    if (ImGui::Button("Add Variant")) {
+                                        variants[new_variant_name] = nlohmann::json::object({{"thinkingConfig", {{"thinkingBudget", 0}}}});
+                                        config_modified_ = true;
+                                        std::memset(new_variant_name, 0, sizeof(new_variant_name));
+                                    }
+                                    ImGui::EndDisabled();
+                                    
+                                    ImGui::TreePop();
+                                }
+                                
+                                ImGui::TreePop();
+                            }
+                            ImGui::PopID();
+                        }
+                        
+                        for (const auto& mid : models_to_delete) {
+                            provider.models.erase(mid);
+                            config_modified_ = true;
+                        }
+                        
+                        ImGui::TreePop();
+                    }
+                }
+                
+                if (ImGui::TreeNode("Add Model")) {
+                    auto& new_model_id = new_model_id_buffers_[id];
+                    if (new_model_id.empty()) new_model_id.resize(128);
+                    
+                    ImGui::SetNextItemWidth(200);
+                    ImGui::InputTextWithHint("##newmodelid", "model-id", &new_model_id[0], new_model_id.size());
+                    ImGui::SameLine();
+                    
+                    bool can_add_model = new_model_id[0] != '\0' && 
+                        provider.models.find(new_model_id.c_str()) == provider.models.end();
+                    ImGui::BeginDisabled(!can_add_model);
+                    if (ImGui::Button("Add")) {
+                        std::string mid = new_model_id.c_str();
+                        provider.models[mid] = nlohmann::json::object({{"name", mid}});
+                        config_modified_ = true;
+                        std::fill(new_model_id.begin(), new_model_id.end(), '\0');
+                    }
+                    ImGui::EndDisabled();
+                    ImGui::TreePop();
+                }
+                
                 ImGui::TreePop();
             }
             
@@ -711,6 +906,8 @@ void OpenCodePanel::render_advanced_section() {
         }
         
         render_string_list("Watcher Ignore", editing_config_.watcher_ignore);
+        
+        render_string_list("Plugins", editing_config_.plugins);
         
         ImGui::Unindent();
     }

@@ -129,13 +129,13 @@ make -j8
 - Radio button to activate profile (syncs to `opencode.json`)
 - Full config editing:
   - Basic: model, small_model, theme, default_agent, instructions
-  - Providers: API keys, base URLs, enabled/disabled providers
+  - Providers: API keys, base URLs, custom models with full configuration (name, limits, modalities, variants)
   - Agents: custom agents with model, prompt, tool restrictions
   - Tools: enable/disable individual tools
   - Permissions: per-tool approval settings (ask/allow)
   - MCP Servers: local and remote MCP server configuration
   - TUI: scroll speed, acceleration, diff style
-  - Advanced: share mode, auto-update, compaction, watcher ignore
+  - Advanced: share mode, auto-update, compaction, watcher ignore, plugins
 
 ### Agent Config Panel (Left)
 The Agent Config panel provides unified access to both Claude Code and OpenCode configuration with tab switching at the top of the panel.
@@ -300,7 +300,7 @@ diana/
 
 ## Testing
 
-The project includes 79 unit tests covering core functionality:
+The project includes 87 unit tests covering core functionality:
 
 ```bash
 ./diana_tests
@@ -314,7 +314,7 @@ The project includes 79 unit tests covering core functionality:
 | AgentTokenStoreTest | 10 | JSONL parsing, session tracking |
 | ClaudeUsageCollectorTest | 12 | File watching, incremental parsing |
 | ConfigExporterTest | 5 | JSON export/import |
-| OpenCodeConfigTest | 17 | OpenCode JSON serialization |
+| OpenCodeConfigTest | 25 | OpenCode JSON serialization, empty field handling |
 | OpenCodeProfileTest | 1 | Profile serialization |
 | OpenCodeProfileStoreTest | 8 | Profile store operations |
 | OpenCodeProfileStoreIntegrationTest | 6 | CRUD integration tests |

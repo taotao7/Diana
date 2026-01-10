@@ -83,8 +83,8 @@ void from_json(const nlohmann::json& j, OpenCodeTuiConfig& t) {
 
 void to_json(nlohmann::json& j, const OpenCodeCompactionConfig& c) {
     j = nlohmann::json::object();
-    j["auto"] = c.auto_compact;
-    j["prune"] = c.prune;
+    if (!c.auto_compact) j["auto"] = c.auto_compact;
+    if (!c.prune) j["prune"] = c.prune;
 }
 
 void from_json(const nlohmann::json& j, OpenCodeCompactionConfig& c) {
@@ -131,9 +131,9 @@ void to_json(nlohmann::json& j, const OpenCodePermissions& p) {
     j = nlohmann::json::object();
     if (!p.allowed_commands.empty()) j["allowedCommands"] = p.allowed_commands;
     if (!p.denied_commands.empty()) j["deniedCommands"] = p.denied_commands;
-    j["autoApproveReads"] = p.auto_approve_reads;
-    j["autoApproveWrites"] = p.auto_approve_writes;
-    j["autoApproveCommands"] = p.auto_approve_commands;
+    if (!p.auto_approve_reads) j["autoApproveReads"] = p.auto_approve_reads;
+    if (p.auto_approve_writes) j["autoApproveWrites"] = p.auto_approve_writes;
+    if (p.auto_approve_commands) j["autoApproveCommands"] = p.auto_approve_commands;
     if (!p.allowed_paths.empty()) j["allowedPaths"] = p.allowed_paths;
     if (!p.denied_paths.empty()) j["deniedPaths"] = p.denied_paths;
 }
@@ -266,11 +266,15 @@ OpenCodeConfig OpenCodeConfig::from_json(const nlohmann::json& j) {
         config.experimental = j["experimental"];
     }
     
+    if (j.contains("plugin") && j["plugin"].is_array()) {
+        config.plugins = j["plugin"].get<std::vector<std::string>>();
+    }
+    
     static const std::vector<std::string> known_keys = {
         "model", "small_model", "theme", "default_agent", "provider", "agent",
         "permission", "tools", "instructions", "tui", "compaction", "watcher",
         "mcp", "share", "autoupdate", "disabled_providers", "enabled_providers",
-        "keybinds", "experimental", "$schema"
+        "keybinds", "experimental", "plugin", "$schema"
     };
     
     for (auto& [key, value] : j.items()) {
@@ -304,9 +308,13 @@ nlohmann::json OpenCodeConfig::to_json() const {
         for (const auto& [key, value] : providers) {
             nlohmann::json pj;
             diana::to_json(pj, value);
-            provider_obj[key] = pj;
+            if (!pj.empty()) {
+                provider_obj[key] = pj;
+            }
         }
-        j["provider"] = provider_obj;
+        if (!provider_obj.empty()) {
+            j["provider"] = provider_obj;
+        }
     }
     
     if (!agents.empty()) {
@@ -314,9 +322,13 @@ nlohmann::json OpenCodeConfig::to_json() const {
         for (const auto& [key, value] : agents) {
             nlohmann::json aj;
             diana::to_json(aj, value);
-            agent_obj[key] = aj;
+            if (!aj.empty()) {
+                agent_obj[key] = aj;
+            }
         }
-        j["agent"] = agent_obj;
+        if (!agent_obj.empty()) {
+            j["agent"] = agent_obj;
+        }
     }
     
     if (!permission_tools.empty()) {
@@ -353,9 +365,13 @@ nlohmann::json OpenCodeConfig::to_json() const {
         for (const auto& [key, value] : mcp) {
             nlohmann::json mj;
             diana::to_json(mj, value);
-            mcp_obj[key] = mj;
+            if (!mj.empty()) {
+                mcp_obj[key] = mj;
+            }
         }
-        j["mcp"] = mcp_obj;
+        if (!mcp_obj.empty()) {
+            j["mcp"] = mcp_obj;
+        }
     }
     
     if (share != "manual") {
@@ -384,6 +400,10 @@ nlohmann::json OpenCodeConfig::to_json() const {
     
     if (!experimental.empty()) {
         j["experimental"] = experimental;
+    }
+    
+    if (!plugins.empty()) {
+        j["plugin"] = plugins;
     }
     
     return j;

@@ -3,6 +3,7 @@
 #include "adapters/opencode_profile_store.h"
 #include <imgui.h>
 #include <array>
+#include <map>
 
 namespace diana {
 
@@ -52,6 +53,8 @@ private:
     std::string new_path_;
     std::string new_tool_id_;
     std::string new_mcp_id_;
+    
+    std::map<std::string, std::string> new_model_id_buffers_;
     
     std::string status_message_;
     float status_time_ = 0.0f;
