@@ -29,6 +29,52 @@ log() {
     echo "[$(date '+%H:%M:%S')] $*"
 }
 
+generate_icns() {
+    log "Generating AppIcon.icns from resources/icon.png..."
+    
+    local source_icon="${PROJECT_ROOT}/resources/icon.png"
+    local iconset_dir="${BUILD_DIR}/AppIcon.iconset"
+    local icns_output="${BUILD_DIR}/AppIcon.icns"
+    
+    if [[ ! -f "$source_icon" ]]; then
+        log "Warning: Source icon not found at ${source_icon}"
+        return 1
+    fi
+    
+    # Clean previous iconset
+    rm -rf "$iconset_dir"
+    mkdir -p "$iconset_dir"
+    
+    # Generate all required icon sizes using sips
+    # macOS .icns requires specific sizes: 16, 32, 128, 256, 512 (and @2x variants)
+    local sizes=(16 32 128 256 512)
+    
+    for size in "${sizes[@]}"; do
+        # Standard resolution
+        sips -z "$size" "$size" "$source_icon" --out "${iconset_dir}/icon_${size}x${size}.png" >/dev/null 2>&1
+        
+        # @2x (Retina) resolution
+        local size_2x=$((size * 2))
+        if [[ $size_2x -le 1024 ]]; then
+            sips -z "$size_2x" "$size_2x" "$source_icon" --out "${iconset_dir}/icon_${size}x${size}@2x.png" >/dev/null 2>&1
+        fi
+    done
+    
+    # Convert iconset to icns using iconutil
+    iconutil -c icns "$iconset_dir" -o "$icns_output"
+    
+    # Clean up iconset directory
+    rm -rf "$iconset_dir"
+    
+    if [[ -f "$icns_output" ]]; then
+        log "Generated: $icns_output"
+        return 0
+    else
+        log "Warning: Failed to generate icns"
+        return 1
+    fi
+}
+
 error() {
     echo "[ERROR] $*" >&2
     exit 1
@@ -66,12 +112,12 @@ create_app_bundle() {
         log "Copied resources"
     fi
     
-    # Copy icon if exists
-    if [[ -f "${PACKAGING_DIR}/AppIcon.icns" ]]; then
-        cp "${PACKAGING_DIR}/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/"
+    # Copy generated icon
+    if [[ -f "${BUILD_DIR}/AppIcon.icns" ]]; then
+        cp "${BUILD_DIR}/AppIcon.icns" "${APP_BUNDLE}/Contents/Resources/"
         log "Copied app icon"
     else
-        log "Warning: No AppIcon.icns found in ${PACKAGING_DIR}"
+        log "Warning: No AppIcon.icns found in ${BUILD_DIR}"
     fi
     
     # Create PkgInfo
@@ -211,6 +257,7 @@ main() {
     log "Starting Diana packaging (version: $VERSION)"
     
     check_binary
+    generate_icns
     create_app_bundle
     fix_library_paths
     codesign_app
