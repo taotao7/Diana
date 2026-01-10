@@ -15,9 +15,11 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 > Token metrics are tracked per project directory. Running multiple agents on the same project directory will cause conflicts and inaccurate metrics.
 >
 > **Best Practice:** Use `git worktree` to create separate directories for parallel work on the same repository:
+>
 > ```bash
 > git worktree add ../my-project-feature feature-branch
 > ```
+>
 > This way, each agent operates in its own directory with isolated token tracking.
 
 ## Features
@@ -35,11 +37,11 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 
 ## Supported Agents
 
-| Agent | Config Location | Format |
-|-------|----------------|--------|
-| Claude Code | `~/.claude/settings.json` | JSON |
-| Codex | `~/.codex/config.toml` | TOML |
-| OpenCode | `~/.config/opencode/opencode.json` | JSONC |
+| Agent       | Config Location                    | Format |
+| ----------- | ---------------------------------- | ------ |
+| Claude Code | `~/.claude/settings.json`          | JSON   |
+| Codex       | `~/.codex/config.toml`             | TOML   |
+| OpenCode    | `~/.config/opencode/opencode.json` | JSONC  |
 
 Providers/models can be entered directly in the configuration fields.
 
@@ -50,23 +52,24 @@ Providers/models can be entered directly in the configuration fields.
 
 ## Technology Stack
 
-| Category | Technology | Purpose |
-|----------|------------|---------|
-| **Language** | C++17 | Core implementation |
-| **Build System** | CMake 3.20+ | Cross-platform build configuration |
-| **UI Framework** | [Dear ImGui](https://github.com/ocornut/imgui) (docking) | Immediate-mode GUI |
-| **Charting** | [ImPlot](https://github.com/epezent/implot) | Real-time data visualization |
-| **Windowing** | [GLFW](https://github.com/glfw/glfw) 3.4 | Cross-platform window/input |
-| **Graphics** | OpenGL 3.3+ | Hardware-accelerated rendering |
-| **Terminal** | libvterm | VT100/xterm emulation |
-| **JSON** | [nlohmann/json](https://github.com/nlohmann/json) 3.11.3 | Config parsing, JSONL processing |
-| **TOML** | [tomlplusplus](https://github.com/marzer/tomlplusplus) 3.4.0 | Codex config parsing |
-| **File Dialog** | [nativefiledialog-extended](https://github.com/btzy/nativefiledialog-extended) | Native OS file dialogs |
-| **Testing** | [GoogleTest](https://github.com/google/googletest) 1.14.0 | Unit testing framework |
+| Category         | Technology                                                                     | Purpose                            |
+| ---------------- | ------------------------------------------------------------------------------ | ---------------------------------- |
+| **Language**     | C++17                                                                          | Core implementation                |
+| **Build System** | CMake 3.20+                                                                    | Cross-platform build configuration |
+| **UI Framework** | [Dear ImGui](https://github.com/ocornut/imgui) (docking)                       | Immediate-mode GUI                 |
+| **Charting**     | [ImPlot](https://github.com/epezent/implot)                                    | Real-time data visualization       |
+| **Windowing**    | [GLFW](https://github.com/glfw/glfw) 3.4                                       | Cross-platform window/input        |
+| **Graphics**     | OpenGL 3.3+                                                                    | Hardware-accelerated rendering     |
+| **Terminal**     | libvterm                                                                       | VT100/xterm emulation              |
+| **JSON**         | [nlohmann/json](https://github.com/nlohmann/json) 3.11.3                       | Config parsing, JSONL processing   |
+| **TOML**         | [tomlplusplus](https://github.com/marzer/tomlplusplus) 3.4.0                   | Codex config parsing               |
+| **File Dialog**  | [nativefiledialog-extended](https://github.com/btzy/nativefiledialog-extended) | Native OS file dialogs             |
+| **Testing**      | [GoogleTest](https://github.com/google/googletest) 1.14.0                      | Unit testing framework             |
 
 ## Requirements
 
 ### macOS
+
 - Xcode Command Line Tools
 - CMake 3.20+
 
@@ -76,6 +79,7 @@ xcode-select --install
 ```
 
 ### Linux
+
 - GCC 9+ or Clang 10+
 - CMake 3.20+
 - OpenGL development libraries
@@ -138,6 +142,7 @@ Generate an app-specific password at [appleid.apple.com](https://appleid.apple.c
 ## Usage
 
 ### Terminal Panel (Center)
+
 - Click "+" to create a terminal session
 - Select agent type (Claude Code, Codex, OpenCode)
 - Click "Start" to launch the agent
@@ -145,6 +150,7 @@ Generate an app-specific password at [appleid.apple.com](https://appleid.apple.c
 - Click "Stop" to terminate the agent
 
 ### Claude Code Panel (Left)
+
 - Multi-profile configuration management
 - Create, edit, rename, delete profiles
 - Import current config from `settings.json`
@@ -152,6 +158,7 @@ Generate an app-specific password at [appleid.apple.com](https://appleid.apple.c
 - Full config editing: model, env vars, permissions, sandbox, attribution
 
 ### OpenCode Panel (Left)
+
 - Multi-profile configuration management
 - Create, edit, rename, delete profiles
 - Import current config from `opencode.json`
@@ -167,9 +174,11 @@ Generate an app-specific password at [appleid.apple.com](https://appleid.apple.c
   - Advanced: share mode, auto-update, compaction, watcher ignore, plugins
 
 ### Agent Config Panel (Left)
+
 The Agent Config panel provides unified access to both Claude Code and OpenCode configuration with tab switching at the top of the panel.
 
 ### Token Metrics Panel (Right)
+
 - Monitors token usage from `~/.claude/*.jsonl` files
 - Displays real-time rates (tok/sec, tok/min)
 - Shows cumulative totals and costs
@@ -177,6 +186,7 @@ The Agent Config panel provides unified access to both Claude Code and OpenCode 
 - Per-session scope selector
 
 ### Agent Token Stats Panel (Right)
+
 - Aggregates token usage per agent type (Claude Code, Codex, OpenCode)
 - Scans `~/.claude/projects/` and `~/.claude/transcripts/` directories
 - Displays total tokens, cost, and token breakdown (input/output/cache)
@@ -248,11 +258,11 @@ diana/
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                            AppShell                                  │
-│  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐ │
+│                            AppShell                                 │
+│  ┌─────────────────-┐  ┌─────────────────┐  ┌─────────────────────┐ │
 │  │ AgentConfigPanel │  │  TerminalPanel  │  │   MetricsPanel      │ │
 │  │ (Claude+OpenCode)│  │  (Multi-tab)    │  │   AgentTokenPanel   │ │
-│  └────────┬────────┘  └────────┬────────┘  └──────────┬──────────┘ │
+│  └────────┬─────────┘  └────────┬────────┘  └──────────┬──────────┘ │
 └───────────┼─────────────────────┼──────────────────────┼────────────┘
             │                     │                      │
             ▼                     ▼                      ▼
@@ -278,10 +288,10 @@ diana/
                              ▼
 ┌────────────────────────────────────────────────────────────┐
 │                     TerminalPanel                          │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐                │
-│  │  Tab 1   │  │  Tab 2   │  │  Tab N   │                │
-│  │ Session  │  │ Session  │  │ Session  │                │
-│  └────┬─────┘  └────┬─────┘  └────┬─────┘                │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                  │
+│  │  Tab 1   │  │  Tab 2   │  │  Tab N   │                  │
+│  │ Session  │  │ Session  │  │ Session  │                  │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘                  │
 └───────┼─────────────┼─────────────┼────────────────────────┘
         │             │             │
         └─────────────┼─────────────┘
@@ -315,9 +325,9 @@ diana/
             │
     ┌───────┴───────┐
     ▼               ▼
-┌─────────┐  ┌────────────────┐
+┌─────────┐  ┌─────────────────┐
 │Metrics  │  │MultiMetricsStore│  (per-project aggregation)
-│Store    │  └───────┬────────┘
+│Store    │  └───────┬─────────┘
 └────┬────┘          │
      │               │
      ▼               ▼
@@ -335,21 +345,21 @@ The project includes 87 unit tests covering core functionality:
 ./diana_tests
 ```
 
-| Test Suite | Tests | Coverage |
-|------------|-------|----------|
-| EventQueueTest | 5 | Thread-safe queue operations |
-| MetricsStoreTest | 5 | Token aggregation, EMA rates |
-| MultiMetricsStoreTest | 7 | Per-project storage |
-| AgentTokenStoreTest | 10 | JSONL parsing, session tracking |
-| ClaudeUsageCollectorTest | 12 | File watching, incremental parsing |
-| ConfigExporterTest | 5 | JSON export/import |
-| OpenCodeConfigTest | 25 | OpenCode JSON serialization, empty field handling |
-| OpenCodeProfileTest | 1 | Profile serialization |
-| OpenCodeProfileStoreTest | 8 | Profile store operations |
-| OpenCodeProfileStoreIntegrationTest | 6 | CRUD integration tests |
-| AgentTokenUsageTest | 1 | Token calculation |
-| DailyTokenDataTest | 1 | Date formatting |
-| AgentTypeNameTest | 1 | Enum to string |
+| Test Suite                          | Tests | Coverage                                          |
+| ----------------------------------- | ----- | ------------------------------------------------- |
+| EventQueueTest                      | 5     | Thread-safe queue operations                      |
+| MetricsStoreTest                    | 5     | Token aggregation, EMA rates                      |
+| MultiMetricsStoreTest               | 7     | Per-project storage                               |
+| AgentTokenStoreTest                 | 10    | JSONL parsing, session tracking                   |
+| ClaudeUsageCollectorTest            | 12    | File watching, incremental parsing                |
+| ConfigExporterTest                  | 5     | JSON export/import                                |
+| OpenCodeConfigTest                  | 25    | OpenCode JSON serialization, empty field handling |
+| OpenCodeProfileTest                 | 1     | Profile serialization                             |
+| OpenCodeProfileStoreTest            | 8     | Profile store operations                          |
+| OpenCodeProfileStoreIntegrationTest | 6     | CRUD integration tests                            |
+| AgentTokenUsageTest                 | 1     | Token calculation                                 |
+| DailyTokenDataTest                  | 1     | Date formatting                                   |
+| AgentTypeNameTest                   | 1     | Enum to string                                    |
 
 ## Roadmap
 
@@ -366,17 +376,18 @@ The project includes 87 unit tests covering core functionality:
 
 All dependencies are fetched automatically via CMake FetchContent:
 
-| Dependency | Version | Purpose |
-|------------|---------|---------|
-| Dear ImGui | docking branch | Immediate-mode GUI framework |
-| GLFW | 3.4 | Cross-platform windowing |
-| ImPlot | master | Real-time plotting |
-| nlohmann/json | 3.11.3 | JSON/JSONL parsing |
-| tomlplusplus | 3.4.0 | TOML config parsing |
-| nativefiledialog-extended | 1.2.1 | Native file dialogs |
-| GoogleTest | 1.14.0 | Unit testing (optional) |
+| Dependency                | Version        | Purpose                      |
+| ------------------------- | -------------- | ---------------------------- |
+| Dear ImGui                | docking branch | Immediate-mode GUI framework |
+| GLFW                      | 3.4            | Cross-platform windowing     |
+| ImPlot                    | master         | Real-time plotting           |
+| nlohmann/json             | 3.11.3         | JSON/JSONL parsing           |
+| tomlplusplus              | 3.4.0          | TOML config parsing          |
+| nativefiledialog-extended | 1.2.1          | Native file dialogs          |
+| GoogleTest                | 1.14.0         | Unit testing (optional)      |
 
 Vendored:
+
 - **libvterm** (in `third_party/libvterm/`) - Terminal emulation
 
 ## Font
