@@ -162,8 +162,12 @@ add_executable(diana
     src/adapters/config_exporter.cpp
     src/adapters/claude_code_config.cpp
     src/adapters/claude_profile_store.cpp
+    src/adapters/opencode_config.cpp
+    src/adapters/opencode_profile_store.cpp
     src/ui/metrics_panel.cpp
     src/ui/claude_code_panel.cpp
+    src/ui/opencode_panel.cpp
+    src/ui/agent_config_panel.cpp
     src/ui/agent_token_panel.cpp
     src/ui/theme.cpp
     $<$<PLATFORM_ID:Darwin>:src/ui/theme_macos.mm>
@@ -215,11 +219,15 @@ if(DIANA_BUILD_TESTS)
         tests/metrics/test_agent_token_store.cpp
         tests/metrics/test_claude_usage_collector.cpp
         tests/adapters/test_config_exporter.cpp
+        tests/adapters/test_opencode_config.cpp
+        tests/adapters/test_opencode_profile_store.cpp
         src/metrics/metrics_store.cpp
         src/metrics/multi_metrics_store.cpp
         src/metrics/agent_token_store.cpp
         src/metrics/claude_usage_collector.cpp
         src/adapters/config_exporter.cpp
+        src/adapters/opencode_config.cpp
+        src/adapters/opencode_profile_store.cpp
     )
     
     target_include_directories(diana_tests PRIVATE

@@ -20,7 +20,13 @@ AgentTokenStore::AgentTokenStore() {
     if (home) {
         claude_dir_ = std::string(home) + "/.claude";
         codex_dir_ = std::string(home) + "/.codex";
-        opencode_dir_ = std::string(home) + "/.config/opencode";
+        
+        const char* xdg_data = std::getenv("XDG_DATA_HOME");
+        if (xdg_data) {
+            opencode_dir_ = std::string(xdg_data) + "/opencode/storage";
+        } else {
+            opencode_dir_ = std::string(home) + "/.local/share/opencode/storage";
+        }
     }
 }
 
@@ -49,6 +55,7 @@ void AgentTokenStore::poll() {
 
 void AgentTokenStore::scan_all() {
     scan_claude_directory();
+    scan_opencode_directory();
 }
 
 void AgentTokenStore::scan_claude_directory() {
@@ -67,6 +74,114 @@ void AgentTokenStore::scan_claude_directory() {
     if (fs::exists(transcripts_dir)) {
         scan_directory_recursive(transcripts_dir, AgentType::ClaudeCode);
     }
+}
+
+void AgentTokenStore::scan_opencode_directory() {
+    namespace fs = std::filesystem;
+    
+    if (opencode_dir_.empty() || !fs::exists(opencode_dir_)) {
+        return;
+    }
+    
+    fs::path message_dir = fs::path(opencode_dir_) / "message";
+    if (!fs::exists(message_dir)) {
+        return;
+    }
+    
+    for (const auto& session_entry : fs::directory_iterator(message_dir)) {
+        if (!session_entry.is_directory()) continue;
+        
+        std::string session_id = session_entry.path().filename().string();
+        
+        for (const auto& msg_entry : fs::directory_iterator(session_entry.path())) {
+            if (!msg_entry.is_regular_file()) continue;
+            if (msg_entry.path().extension() != ".json") continue;
+            
+            process_opencode_message_file(msg_entry.path(), session_id);
+        }
+    }
+}
+
+void AgentTokenStore::process_opencode_message_file(const std::filesystem::path& path, 
+                                                     const std::string& session_id) {
+    namespace fs = std::filesystem;
+    
+    static std::unordered_map<std::string, fs::file_time_type> processed_files;
+    
+    auto mtime = fs::last_write_time(path);
+    auto it = processed_files.find(path.string());
+    if (it != processed_files.end() && it->second == mtime) {
+        return;
+    }
+    processed_files[path.string()] = mtime;
+    
+    std::ifstream file(path);
+    if (!file) return;
+    
+    std::string content((std::istreambuf_iterator<char>(file)),
+                        std::istreambuf_iterator<char>());
+    
+    try {
+        nlohmann::json j = nlohmann::json::parse(content);
+        
+        AgentTokenUsage usage;
+        if (parse_opencode_message(j, usage)) {
+            std::lock_guard<std::mutex> lock(mutex_);
+            
+            opencode_session_ids_.insert(session_id);
+            
+            auto& session = sessions_[session_id];
+            if (session.session_id.empty()) {
+                session.session_id = session_id;
+                session.first_seen = std::chrono::system_clock::now();
+                session.is_subagent = false;
+            }
+            
+            session.tokens.input_tokens += usage.input_tokens;
+            session.tokens.output_tokens += usage.output_tokens;
+            session.tokens.cache_creation_tokens += usage.cache_creation_tokens;
+            session.tokens.cache_read_tokens += usage.cache_read_tokens;
+            session.tokens.cost_usd += usage.cost_usd;
+            session.last_seen = std::chrono::system_clock::now();
+            session.message_count++;
+            
+            ++files_processed_;
+        }
+    } catch (...) {
+    }
+}
+
+bool AgentTokenStore::parse_opencode_message(const nlohmann::json& j, AgentTokenUsage& usage) {
+    if (!j.contains("tokens")) {
+        return false;
+    }
+    
+    const auto& tokens = j["tokens"];
+    
+    if (tokens.contains("input") && tokens["input"].is_number()) {
+        usage.input_tokens = tokens["input"].get<uint64_t>();
+    }
+    if (tokens.contains("output") && tokens["output"].is_number()) {
+        usage.output_tokens = tokens["output"].get<uint64_t>();
+    }
+    if (tokens.contains("reasoning") && tokens["reasoning"].is_number()) {
+        usage.output_tokens += tokens["reasoning"].get<uint64_t>();
+    }
+    if (tokens.contains("cache") && tokens["cache"].is_object()) {
+        const auto& cache = tokens["cache"];
+        if (cache.contains("read") && cache["read"].is_number()) {
+            usage.cache_read_tokens = cache["read"].get<uint64_t>();
+        }
+        if (cache.contains("write") && cache["write"].is_number()) {
+            usage.cache_creation_tokens = cache["write"].get<uint64_t>();
+        }
+    }
+    
+    if (j.contains("cost") && j["cost"].is_number()) {
+        usage.cost_usd = j["cost"].get<double>();
+    }
+    
+    return usage.total() > 0;
 }
 
 void AgentTokenStore::scan_directory_recursive(const std::filesystem::path& dir, AgentType type) {
@@ -249,15 +364,20 @@ AgentTypeStats AgentTokenStore::get_stats(AgentType type) const {
     
     for (const auto& [id, session] : sessions_) {
         bool match = false;
-        for (const auto& file : files_) {
-            if (file.session_id == id && file.agent_type == type) {
-                match = true;
-                break;
-            }
-        }
         
-        if (!match && type == AgentType::ClaudeCode) {
-            match = true;
+        if (type == AgentType::OpenCode) {
+            match = opencode_session_ids_.count(id) > 0;
+        } else {
+            for (const auto& file : files_) {
+                if (file.session_id == id && file.agent_type == type) {
+                    match = true;
+                    break;
+                }
+            }
+            
+            if (!match && type == AgentType::ClaudeCode && opencode_session_ids_.count(id) == 0) {
+                match = true;
+            }
         }
         
         if (match) {
@@ -310,15 +430,20 @@ std::vector<AgentSession> AgentTokenStore::get_sessions(AgentType type) const {
     
     for (const auto& [id, session] : sessions_) {
         bool match = false;
-        for (const auto& file : files_) {
-            if (file.session_id == id && file.agent_type == type) {
-                match = true;
-                break;
-            }
-        }
         
-        if (!match && type == AgentType::ClaudeCode) {
-            match = true;
+        if (type == AgentType::OpenCode) {
+            match = opencode_session_ids_.count(id) > 0;
+        } else {
+            for (const auto& file : files_) {
+                if (file.session_id == id && file.agent_type == type) {
+                    match = true;
+                    break;
+                }
+            }
+            
+            if (!match && type == AgentType::ClaudeCode && opencode_session_ids_.count(id) == 0) {
+                match = true;
+            }
         }
         
         if (match) {
@@ -357,15 +482,20 @@ std::vector<DailyTokenData> AgentTokenStore::get_daily_data(AgentType type) cons
     
     for (const auto& [id, session] : sessions_) {
         bool match = false;
-        for (const auto& file : files_) {
-            if (file.session_id == id && file.agent_type == type) {
-                match = true;
-                break;
-            }
-        }
         
-        if (!match && type == AgentType::ClaudeCode) {
-            match = true;
+        if (type == AgentType::OpenCode) {
+            match = opencode_session_ids_.count(id) > 0;
+        } else {
+            for (const auto& file : files_) {
+                if (file.session_id == id && file.agent_type == type) {
+                    match = true;
+                    break;
+                }
+            }
+            
+            if (!match && type == AgentType::ClaudeCode && opencode_session_ids_.count(id) == 0) {
+                match = true;
+            }
         }
         
         if (match && session.first_seen > year_ago) {

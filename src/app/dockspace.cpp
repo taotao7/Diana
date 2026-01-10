@@ -48,7 +48,7 @@ void render_dockspace(bool first_frame) {
             
             ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.5f, nullptr, &dock_id_right);
 
-            ImGui::DockBuilderDockWindow("Claude Code", dock_id_left);
+            ImGui::DockBuilderDockWindow("Agent Config", dock_id_left);
             ImGui::DockBuilderDockWindow("Terminal", dock_id_center);
             ImGui::DockBuilderDockWindow("Token Metrics", dock_id_right);
             ImGui::DockBuilderDockWindow("Agent Token Stats", dock_id_right_bottom);

@@ -26,6 +26,8 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 - Per-project token metrics tracking
 - Config import/export for backup and sharing
 - Claude Code multi-profile configuration management
+- OpenCode multi-profile configuration management
+- Unified Agent Config panel with tab switching
 - GitHub-style activity heatmap for token usage
 
 ## Supported Agents
@@ -120,6 +122,24 @@ make -j8
 - Radio button to activate profile (syncs to `settings.json`)
 - Full config editing: model, env vars, permissions, sandbox, attribution
 
+### OpenCode Panel (Left)
+- Multi-profile configuration management
+- Create, edit, rename, delete profiles
+- Import current config from `opencode.json`
+- Radio button to activate profile (syncs to `opencode.json`)
+- Full config editing:
+  - Basic: model, small_model, theme, default_agent, instructions
+  - Providers: API keys, base URLs, enabled/disabled providers
+  - Agents: custom agents with model, prompt, tool restrictions
+  - Tools: enable/disable individual tools
+  - Permissions: per-tool approval settings (ask/allow)
+  - MCP Servers: local and remote MCP server configuration
+  - TUI: scroll speed, acceleration, diff style
+  - Advanced: share mode, auto-update, compaction, watcher ignore
+
+### Agent Config Panel (Left)
+The Agent Config panel provides unified access to both Claude Code and OpenCode configuration with tab switching at the top of the panel.
+
 ### Token Metrics Panel (Right)
 - Monitors token usage from `~/.claude/*.jsonl` files
 - Displays real-time rates (tok/sec, tok/min)
@@ -161,6 +181,8 @@ diana/
 │   │   ├── claude_profile_store.h/cpp# Multi-profile CRUD operations
 │   │   ├── codex_adapter.h/cpp       # Codex config.toml
 │   │   ├── opencode_adapter.h/cpp    # OpenCode config adapter
+│   │   ├── opencode_config.h/cpp     # Full OpenCode config struct
+│   │   ├── opencode_profile_store.h/cpp # OpenCode multi-profile CRUD
 │   │   ├── config_manager.h/cpp      # Unified config access facade
 │   │   └── config_exporter.h/cpp     # JSON export/import utilities
 │   ├── metrics/
@@ -170,7 +192,9 @@ diana/
 │   │   └── agent_token_store.h/cpp   # Per-agent token aggregation
 │   └── ui/
 │       ├── theme.h/cpp               # Catppuccin theme + system detection
-│       ├── claude_code_panel.h/cpp   # Profile list + config editor
+│       ├── claude_code_panel.h/cpp   # Claude Code profile list + config editor
+│       ├── opencode_panel.h/cpp      # OpenCode profile list + config editor
+│       ├── agent_config_panel.h/cpp  # Unified tab panel for agent configs
 │       ├── metrics_panel.h/cpp       # Real-time token charts
 │       └── agent_token_panel.h/cpp   # Agent stats + heatmap
 ├── tests/
@@ -181,7 +205,10 @@ diana/
 │   │   ├── test_multi_metrics_store.cpp
 │   │   ├── test_agent_token_store.cpp
 │   │   └── test_claude_usage_collector.cpp
-│   └── adapters/test_config_exporter.cpp
+│   └── adapters/
+│       ├── test_config_exporter.cpp
+│       ├── test_opencode_config.cpp
+│       └── test_opencode_profile_store.cpp
 ├── third_party/
 │   └── libvterm/                     # Vendored terminal emulation library
 └── resources/
@@ -194,22 +221,22 @@ diana/
 ┌─────────────────────────────────────────────────────────────────────┐
 │                            AppShell                                  │
 │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐ │
-│  │  ClaudeCodePanel │  │  TerminalPanel  │  │   MetricsPanel      │ │
-│  │  (Config Editor) │  │  (Multi-tab)    │  │   AgentTokenPanel   │ │
+│  │ AgentConfigPanel │  │  TerminalPanel  │  │   MetricsPanel      │ │
+│  │ (Claude+OpenCode)│  │  (Multi-tab)    │  │   AgentTokenPanel   │ │
 │  └────────┬────────┘  └────────┬────────┘  └──────────┬──────────┘ │
 └───────────┼─────────────────────┼──────────────────────┼────────────┘
             │                     │                      │
             ▼                     ▼                      ▼
 ┌───────────────────┐  ┌──────────────────┐  ┌─────────────────────────┐
 │  ProfileStore     │  │SessionController │  │  ClaudeUsageCollector   │
-│  ConfigManager    │  │  ProcessRunner   │  │  MultiMetricsStore      │
-│  ConfigExporter   │  │  VTerminal       │  │  AgentTokenStore        │
+│  (Claude+OpenCode)│  │  ProcessRunner   │  │  MultiMetricsStore      │
+│  ConfigManager    │  │  VTerminal       │  │  AgentTokenStore        │
 └─────────┬─────────┘  └────────┬─────────┘  └───────────┬─────────────┘
           │                     │                        │
           ▼                     ▼                        ▼
     ~/.claude/            PTY/fork               ~/.claude/projects/
-    settings.json         subprocess             *.jsonl files
-    diana_profiles.json
+    ~/.config/opencode/   subprocess             *.jsonl files
+    ~/.config/diana/
 ```
 
 ### Data Flow
@@ -273,7 +300,7 @@ diana/
 
 ## Testing
 
-The project includes 47 unit tests covering core functionality:
+The project includes 79 unit tests covering core functionality:
 
 ```bash
 ./diana_tests
@@ -287,6 +314,10 @@ The project includes 47 unit tests covering core functionality:
 | AgentTokenStoreTest | 10 | JSONL parsing, session tracking |
 | ClaudeUsageCollectorTest | 12 | File watching, incremental parsing |
 | ConfigExporterTest | 5 | JSON export/import |
+| OpenCodeConfigTest | 17 | OpenCode JSON serialization |
+| OpenCodeProfileTest | 1 | Profile serialization |
+| OpenCodeProfileStoreTest | 8 | Profile store operations |
+| OpenCodeProfileStoreIntegrationTest | 6 | CRUD integration tests |
 | AgentTokenUsageTest | 1 | Token calculation |
 | DailyTokenDataTest | 1 | Date formatting |
 | AgentTypeNameTest | 1 | Enum to string |
@@ -294,7 +325,7 @@ The project includes 47 unit tests covering core functionality:
 ## Roadmap
 
 - [ ] Claude Code Skill/MCP marketplace browser
-- [ ] OpenCode configuration panel (similar to Claude Code)
+- [x] OpenCode configuration panel (similar to Claude Code)
 - [ ] Codex configuration panel (similar to Claude Code)
 - [x] Agent token stats panel with per-agent aggregation
 - [x] Per-project token metrics tracking

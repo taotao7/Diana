@@ -14,10 +14,13 @@ ClaudeCodePanel::ClaudeCodePanel() {
 void ClaudeCodePanel::render() {
     ImGui::SetNextWindowSizeConstraints(ImVec2(280, 200), ImVec2(FLT_MAX, FLT_MAX));
     ImGui::Begin("Claude Code");
-    
+    render_content();
+    ImGui::End();
+}
+
+void ClaudeCodePanel::render_content() {
     if (!profile_store_) {
         ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "ProfileStore not initialized");
-        ImGui::End();
         return;
     }
     
@@ -28,16 +31,15 @@ void ClaudeCodePanel::render() {
         status_time_ -= ImGui::GetIO().DeltaTime;
     }
     
-    float panel_width = ImGui::GetContentRegionAvail().x;
     float list_width = 180.0f;
     
-    ImGui::BeginChild("ProfileList", ImVec2(list_width, 0), true);
+    ImGui::BeginChild("ClaudeProfileList", ImVec2(list_width, 0), true);
     render_profile_list();
     ImGui::EndChild();
     
     ImGui::SameLine();
     
-    ImGui::BeginChild("ConfigEditor", ImVec2(0, 0), true);
+    ImGui::BeginChild("ClaudeConfigEditor", ImVec2(0, 0), true);
     render_config_editor();
     ImGui::EndChild();
     
@@ -109,8 +111,6 @@ void ClaudeCodePanel::render() {
         
         ImGui::EndPopup();
     }
-    
-    ImGui::End();
 }
 
 void ClaudeCodePanel::render_profile_list() {

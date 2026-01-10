@@ -11,6 +11,7 @@ public:
     ClaudeCodePanel();
     
     void render();
+    void render_content();
     
     void set_profile_store(ClaudeProfileStore* store) { profile_store_ = store; }
     

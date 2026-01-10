@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <vector>
 #include <filesystem>
+#include <nlohmann/json_fwd.hpp>
+#include <set>
 
 namespace diana {
 
@@ -104,10 +106,13 @@ private:
     };
     
     void scan_claude_directory();
+    void scan_opencode_directory();
     void scan_directory_recursive(const std::filesystem::path& dir, AgentType type);
     void process_file(FileState& state);
+    void process_opencode_message_file(const std::filesystem::path& path, const std::string& session_id);
     bool parse_jsonl_line(const std::string& line, AgentTokenUsage& usage, 
                           std::string& session_id, bool& is_subagent);
+    bool parse_opencode_message(const nlohmann::json& j, AgentTokenUsage& usage);
     
     AgentType detect_agent_type(const std::filesystem::path& path);
     std::string extract_session_id(const std::filesystem::path& path);
@@ -119,6 +124,7 @@ private:
     mutable std::mutex mutex_;
     std::vector<FileState> files_;
     std::unordered_map<std::string, AgentSession> sessions_;
+    std::set<std::string> opencode_session_ids_;
     
     std::chrono::steady_clock::time_point last_scan_{};
     size_t files_processed_ = 0;

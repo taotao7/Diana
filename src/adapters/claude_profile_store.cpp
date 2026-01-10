@@ -3,13 +3,14 @@
 #include <cstdlib>
 #include <chrono>
 #include <sys/stat.h>
+#include <filesystem>
 
 namespace diana {
 
 ClaudeProfileStore::ClaudeProfileStore() {
     const char* home = std::getenv("HOME");
     if (home) {
-        store_path_ = std::string(home) + "/.claude/diana_profiles.json";
+        store_path_ = std::string(home) + "/.config/diana/claude_profiles.json";
         settings_path_ = std::string(home) + "/.claude/settings.json";
     }
 }
@@ -57,6 +58,9 @@ bool ClaudeProfileStore::load() {
 
 bool ClaudeProfileStore::save() {
     if (store_path_.empty()) return false;
+    
+    std::filesystem::path store_dir = std::filesystem::path(store_path_).parent_path();
+    std::filesystem::create_directories(store_dir);
     
     nlohmann::json j;
     j["version"] = 1;
