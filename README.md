@@ -109,6 +109,32 @@ make -j8
 ./diana_tests
 ```
 
+### Package DMG (macOS)
+
+Create a distributable `.app` bundle and DMG:
+
+```bash
+./scripts/package-dmg.sh
+```
+
+Output: `build/Diana-<version>-<arch>.dmg`
+
+### Signed Release (Optional)
+
+For distribution outside the App Store, code signing and notarization are required:
+
+```bash
+export CODESIGN_IDENTITY="Developer ID Application: Your Name (XXXXXXXXXX)"
+export APPLE_ID="your@email.com"
+export APPLE_TEAM_ID="XXXXXXXXXX"
+export APPLE_APP_PASSWORD="xxxx-xxxx-xxxx-xxxx"
+export VERSION="0.1.0"
+
+./scripts/package-dmg.sh
+```
+
+Generate an app-specific password at [appleid.apple.com](https://appleid.apple.com/account/manage).
+
 ## Usage
 
 ### Terminal Panel (Center)
