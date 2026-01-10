@@ -1,0 +1,174 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    strategy:
+      matrix:
+        arch: [arm64, x86_64]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup build environment
+        run: |
+          brew install cmake ninja
+
+      - name: Configure CMake
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES=${{ matrix.arch }} \
+            -DDIANA_BUILD_TESTS=OFF
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Run tests
+        if: matrix.arch == 'arm64'
+        run: |
+          cmake -B build -DDIANA_BUILD_TESTS=ON
+          cmake --build build --config Release
+          ctest --test-dir build --output-on-failure
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Package DMG
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: ./scripts/package-dmg.sh
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: diana-${{ steps.version.outputs.version }}-${{ matrix.arch }}
+          path: build/*.dmg
+
+  create-release:
+    needs: build-macos
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Prepare release files
+        run: |
+          mkdir -p release
+          find artifacts -name "*.dmg" -exec cp {} release/ \;
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          name: Diana v${{ steps.version.outputs.version }}
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') }}
+          files: release/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-macos-universal:
+    needs: build-macos
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Create Universal Binary
+        run: |
+          mkdir -p build
+
+          ARM64_DMG=$(find artifacts -name "*arm64*.dmg" | head -1)
+          X86_DMG=$(find artifacts -name "*x86_64*.dmg" | head -1)
+
+          mkdir -p /tmp/arm64 /tmp/x86_64
+          hdiutil attach "$ARM64_DMG" -mountpoint /tmp/arm64 -quiet
+          hdiutil attach "$X86_DMG" -mountpoint /tmp/x86_64 -quiet
+
+          cp -R /tmp/arm64/Diana.app build/Diana.app
+
+          lipo -create \
+            /tmp/arm64/Diana.app/Contents/MacOS/diana \
+            /tmp/x86_64/Diana.app/Contents/MacOS/diana \
+            -output build/Diana.app/Contents/MacOS/diana
+
+          hdiutil detach /tmp/arm64 -quiet
+          hdiutil detach /tmp/x86_64 -quiet
+
+          VERSION=${{ steps.version.outputs.version }}
+          DMG_NAME="Diana-${VERSION}-universal.dmg"
+
+          hdiutil create -size 100m -fs HFS+ -volname "Diana" /tmp/temp.dmg -quiet
+          hdiutil attach /tmp/temp.dmg -mountpoint /tmp/dmg_mount -quiet
+          cp -R build/Diana.app /tmp/dmg_mount/
+          ln -s /Applications /tmp/dmg_mount/Applications
+          hdiutil detach /tmp/dmg_mount -quiet
+          hdiutil convert /tmp/temp.dmg -format UDZO -imagekey zlib-level=9 -o "build/${DMG_NAME}" -quiet
+
+          ls -la build/*.dmg
+
+      - name: Upload universal DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: diana-${{ steps.version.outputs.version }}-universal
+          path: build/*universal*.dmg
+
+      - name: Add to Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version }}
+          files: build/*universal*.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
