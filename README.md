@@ -39,7 +39,7 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 
 | Agent       | Config Location                    | Format |
 | ----------- | ---------------------------------- | ------ |
-| Claude Code | `~/.claude/settings.json`          | JSON   |
+| Claude Code | `settings.json` (auto-detected)    | JSON   |
 | Codex       | `~/.codex/config.toml`             | TOML   |
 | OpenCode    | `~/.config/opencode/opencode.json` | JSONC  |
 
@@ -49,7 +49,6 @@ Providers/models can be entered directly in the configuration fields.
 
 <img width="3840" height="2224" alt="image" src="https://github.com/user-attachments/assets/dcb56de9-0299-4a36-84e1-34572bba22fc" />
 <img width="3840" height="2224" alt="image" src="https://github.com/user-attachments/assets/79c3494f-cf73-499d-9c69-926936efd8a7" />
-
 
 ## Technology Stack
 
@@ -180,7 +179,7 @@ The Agent Config panel provides unified access to both Claude Code and OpenCode 
 
 ### Token Metrics Panel (Right)
 
-- Monitors token usage from `~/.claude/*.jsonl` files
+- Monitors token usage from Claude JSONL logs (projects/transcripts) and OpenCode storage (`$XDG_DATA_HOME/opencode/storage/message/`)
 - Displays real-time rates (tok/sec, tok/min)
 - Shows cumulative totals and costs
 - Bar chart visualization of token rate over last 60 seconds
@@ -189,7 +188,7 @@ The Agent Config panel provides unified access to both Claude Code and OpenCode 
 ### Agent Token Stats Panel (Right)
 
 - Aggregates token usage per agent type (Claude Code, Codex, OpenCode)
-- Scans `~/.claude/projects/` and `~/.claude/transcripts/` directories
+- Scans Claude Code project/transcript logs and `$XDG_DATA_HOME/opencode/storage/message/` (fallback: `~/.local/share/opencode/storage/message/`)
 - Displays total tokens, cost, and token breakdown (input/output/cache)
 - Session list with subagent detection
 - GitHub-style activity heatmap (last 365 days)
@@ -198,6 +197,7 @@ The Agent Config panel provides unified access to both Claude Code and OpenCode 
 
 ```
 diana/
+├── CMakeLists.txt
 ├── src/
 │   ├── main.cpp                      # Entry point, GLFW/OpenGL setup
 │   ├── app/
@@ -228,10 +228,12 @@ diana/
 │   ├── metrics/
 │   │   ├── metrics_store.h/cpp       # Token metrics with EMA smoothing
 │   │   ├── multi_metrics_store.h/cpp # Per-project metrics hub
-│   │   ├── claude_usage_collector.h/cpp # JSONL file watcher
+│   │   ├── claude_usage_collector.h/cpp # Claude JSONL file watcher
+│   │   ├── opencode_usage_collector.h/cpp # OpenCode storage parser
 │   │   └── agent_token_store.h/cpp   # Per-agent token aggregation
 │   └── ui/
 │       ├── theme.h/cpp               # Catppuccin theme + system detection
+│       ├── theme_macos.mm            # macOS appearance bridge
 │       ├── claude_code_panel.h/cpp   # Claude Code profile list + config editor
 │       ├── opencode_panel.h/cpp      # OpenCode profile list + config editor
 │       ├── agent_config_panel.h/cpp  # Unified tab panel for agent configs
@@ -249,33 +251,42 @@ diana/
 │       ├── test_config_exporter.cpp
 │       ├── test_opencode_config.cpp
 │       └── test_opencode_profile_store.cpp
+├── packaging/
+│   ├── Info.plist.in                 # macOS bundle metadata
+│   └── entitlements.plist            # macOS signing entitlements
+├── scripts/
+│   ├── package-dmg.sh                # DMG packaging
+│   └── generate-appicon.sh           # App icon generator
 ├── third_party/
 │   └── libvterm/                     # Vendored terminal emulation library
 └── resources/
-    └── fonts/unifont.otf             # Unicode font for text rendering
+    └── fonts/
+        ├── IoskeleyMono-*.ttf        # Primary UI font family
+        └── unifont.otf               # Unicode fallback
 ```
 
 ### Component Diagram
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                            AppShell                                 │
-│  ┌─────────────────-┐  ┌─────────────────┐  ┌─────────────────────┐ │
-│  │ AgentConfigPanel │  │  TerminalPanel  │  │   MetricsPanel      │ │
-│  │ (Claude+OpenCode)│  │  (Multi-tab)    │  │   AgentTokenPanel   │ │
-│  └────────┬─────────┘  └────────┬────────┘  └──────────┬──────────┘ │
-└───────────┼─────────────────────┼──────────────────────┼────────────┘
-            │                     │                      │
-            ▼                     ▼                      ▼
-┌───────────────────┐  ┌──────────────────┐  ┌─────────────────────────┐
-│  ProfileStore     │  │SessionController │  │  ClaudeUsageCollector   │
-│  (Claude+OpenCode)│  │  ProcessRunner   │  │  MultiMetricsStore      │
-│  ConfigManager    │  │  VTerminal       │  │  AgentTokenStore        │
-└─────────┬─────────┘  └────────┬─────────┘  └───────────┬─────────────┘
-          │                     │                        │
-          ▼                     ▼                        ▼
-    ~/.claude/            PTY/fork               ~/.claude/projects/
-    ~/.config/opencode/   subprocess             *.jsonl files
+┌──────────────────────────────────────────────────────────────────────┐
+│                               AppShell                               │
+│  ┌───────────────────┐  ┌─────────────────┐  ┌─────────────────────┐ │
+│  │ AgentConfigPanel  │  │  TerminalPanel  │  │   MetricsPanel      │ │
+│  │ (Claude+OpenCode) │  │  (Multi-tab)    │  │   AgentTokenPanel   │ │
+│  └────────┬──────────┘  └────────┬────────┘  └──────────┬──────────┘ │
+└───────────┼──────────────────────┼──────────────────────┼────────────┘
+            │                      │                      │
+            ▼                      ▼                      ▼
+┌────────────────────┐  ┌──────────────────┐  ┌─────────────────────────────┐
+│  ProfileStore      │  │ SessionController│  │  ClaudeUsageCollector       │
+│  (Claude+OpenCode) │  │  ProcessRunner   │  │  OpenCodeUsageCollector     │
+│  ConfigManager     │  │  VTerminal       │  │  MultiMetricsStore          │
+│  ConfigExporter    │  └────────┬─────────┘  │  AgentTokenStore            │
+└─────────┬──────────┘           │            └───────────┬─────────────────┘
+          │                      │                        │
+          ▼                      ▼                        ▼
+    Claude Code config      PTY/fork               Claude Code logs
+    ~/.config/opencode/     subprocess             $XDG_DATA_HOME/opencode/storage/
     ~/.config/diana/
 ```
 
@@ -316,26 +327,25 @@ diana/
 ### Metrics Collection Flow
 
 ```
-~/.claude/projects/**/*.jsonl
-~/.claude/transcripts/**/*.jsonl
+Claude Code JSONL logs (projects/transcripts)
+$XDG_DATA_HOME/opencode/storage/{project,session,message}/
             │
-            ▼
-┌─────────────────────────┐
-│  ClaudeUsageCollector   │  (polls every 5s, incremental parsing)
-└───────────┬─────────────┘
-            │
-    ┌───────┴───────┐
-    ▼               ▼
-┌─────────┐  ┌─────────────────┐
-│Metrics  │  │MultiMetricsStore│  (per-project aggregation)
-│Store    │  └───────┬─────────┘
-└────┬────┘          │
-     │               │
-     ▼               ▼
-┌─────────────┐ ┌─────────────────┐
-│MetricsPanel │ │ AgentTokenPanel │
-│(rate charts)│ │ (heatmap, stats)│
-└─────────────┘ └─────────────────┘
+            ├─────────────────────────────┐
+            ▼                             ▼
+┌────────────────────────────┐    ┌───────────────────┐
+│ ClaudeUsageCollector       │    │ AgentTokenStore   │
+│ OpenCodeUsageCollector     │    │ (Claude+OpenCode) │
+└───────────┬────────────────┘    └──────────┬────────┘
+            │                               │
+            ▼                               ▼
+┌─────────────────┐                 ┌─────────────────┐
+│MultiMetricsStore│                 │ AgentTokenPanel │
+└────────┬────────┘                 └─────────────────┘
+         │
+         ▼
+┌─────────────────┐
+│ MetricsPanel    │
+└─────────────────┘
 ```
 
 ## Testing
@@ -393,7 +403,7 @@ Vendored:
 
 ## Font
 
-Diana uses [GNU Unifont](https://unifoundry.com/unifont/) (`unifont.otf`) for text rendering. Unifont is a Unicode font with near-complete coverage of the Basic Multilingual Plane (BMP), supporting virtually all written languages including CJK (Chinese, Japanese, Korean), Cyrillic, Arabic, Hebrew, Thai, and many more. This ensures consistent text display regardless of language or script.
+Diana loads all `.ttf`, `.otf`, and `.ttc` files from `resources/fonts` at startup and merges them into a single ImGui font atlas. `unifont.otf` ([GNU Unifont](https://unifoundry.com/unifont/)) is used as the Unicode fallback, while the first face with `Regular` in its filename (for example `IoskeleyMono-Regular.ttf`) becomes the primary UI font. Add or replace fonts in that folder to customize the UI without code changes.
 
 ## License
 

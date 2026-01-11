@@ -488,7 +488,7 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                         ImVec2 clip_min = ImGui::GetWindowPos();
                         ImVec2 clip_max = ImVec2(clip_min.x + ImGui::GetWindowSize().x, clip_min.y + ImGui::GetWindowSize().y);
                         if (target_y >= clip_min.y - line_height && target_y <= clip_max.y) {
-                            render_cursor(session, target_x, target_y, char_size.x, line_height, content_start, scroll_y);
+                            render_cursor(session, target_x, target_y, char_size.x, line_height);
                         }
                     }
                 } else {
@@ -500,7 +500,7 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                         auto cursor = terminal.get_cursor();
                         float target_x = content_start.x + cursor.col * char_size.x;
                         float target_y = content_start.y + cursor.row * line_height;
-                        render_cursor(session, target_x, target_y, char_size.x, line_height, content_start, scroll_y);
+                        render_cursor(session, target_x, target_y, char_size.x, line_height);
                     }
                 }
                 
@@ -516,25 +516,101 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
     ImGui::PopStyleColor();
 }
 
-void TerminalPanel::render_cursor(TerminalSession& session, float target_x, float target_y, float char_w, float char_h, const ImVec2& content_start, float scroll_y) {
-    (void)session;
-    (void)content_start;
-    (void)scroll_y;
-
+void TerminalPanel::render_cursor(TerminalSession& session, float target_x, float target_y, float char_w, float char_h) {
+    auto& anim = cursor_animations_[session.id()];
+    float dt = ImGui::GetIO().DeltaTime;
     const auto& theme = get_current_theme();
+    
+    if (!anim.initialized) {
+        anim.current_x = target_x;
+        anim.current_y = target_y;
+        anim.target_x = target_x;
+        anim.target_y = target_y;
+        for (int i = 0; i < CursorAnimation::TRAIL_LENGTH; ++i) {
+            anim.trail_x[i] = target_x;
+            anim.trail_y[i] = target_y;
+            anim.trail_alpha[i] = 0.0f;
+        }
+        anim.initialized = true;
+    }
+    
+    anim.target_x = target_x;
+    anim.target_y = target_y;
+    
+    constexpr float SPRING_STIFFNESS = 35.0f;
+    constexpr float DAMPING = 8.0f;
+    
+    float dx = anim.target_x - anim.current_x;
+    float dy = anim.target_y - anim.current_y;
+    
+    float ax = dx * SPRING_STIFFNESS - anim.velocity_x * DAMPING;
+    float ay = dy * SPRING_STIFFNESS - anim.velocity_y * DAMPING;
+    
+    anim.velocity_x += ax * dt;
+    anim.velocity_y += ay * dt;
+    anim.current_x += anim.velocity_x * dt;
+    anim.current_y += anim.velocity_y * dt;
+    
+    float speed = std::sqrt(anim.velocity_x * anim.velocity_x + anim.velocity_y * anim.velocity_y);
+    
+    constexpr float TRAIL_INTERVAL = 0.012f;
+    anim.trail_timer += dt;
+    if (anim.trail_timer >= TRAIL_INTERVAL && speed > 5.0f) {
+        anim.trail_timer = 0.0f;
+        anim.trail_head = (anim.trail_head + 1) % CursorAnimation::TRAIL_LENGTH;
+        anim.trail_x[anim.trail_head] = anim.current_x;
+        anim.trail_y[anim.trail_head] = anim.current_y;
+        anim.trail_alpha[anim.trail_head] = std::min(1.0f, speed / 800.0f);
+    }
+    
+    for (int i = 0; i < CursorAnimation::TRAIL_LENGTH; ++i) {
+        anim.trail_alpha[i] *= (1.0f - dt * 8.0f);
+    }
+    
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
-    // Semi-transparent block cursor (allows text to show through)
     uint8_t cursor_r = (theme.terminal_cursor >> 0) & 0xFF;
     uint8_t cursor_g = (theme.terminal_cursor >> 8) & 0xFF;
     uint8_t cursor_b = (theme.terminal_cursor >> 16) & 0xFF;
     
-    ImU32 cursor_color = IM_COL32(cursor_r, cursor_g, cursor_b, 100);
+    for (int i = 0; i < CursorAnimation::TRAIL_LENGTH; ++i) {
+        int idx = (anim.trail_head - i + CursorAnimation::TRAIL_LENGTH) % CursorAnimation::TRAIL_LENGTH;
+        float alpha = anim.trail_alpha[idx];
+        if (alpha < 0.01f) continue;
+        
+        float size_factor = 1.0f - (static_cast<float>(i) / CursorAnimation::TRAIL_LENGTH) * 0.6f;
+        float trail_w = char_w * size_factor;
+        float trail_h = char_h * size_factor;
+        float offset_x = (char_w - trail_w) * 0.5f;
+        float offset_y = (char_h - trail_h) * 0.5f;
+        
+        ImU32 trail_color = IM_COL32(cursor_r, cursor_g, cursor_b, static_cast<int>(alpha * 100));
+        draw_list->AddRectFilled(
+            ImVec2(anim.trail_x[idx] + offset_x, anim.trail_y[idx] + offset_y),
+            ImVec2(anim.trail_x[idx] + offset_x + trail_w, anim.trail_y[idx] + offset_y + trail_h),
+            trail_color,
+            2.0f
+        );
+    }
+    
+    float blink = (std::sin(ImGui::GetTime() * 4.0f) + 1.0f) * 0.5f;
+    int base_alpha = 200 + static_cast<int>(blink * 55);
+    
+    ImU32 cursor_color = IM_COL32(cursor_r, cursor_g, cursor_b, base_alpha);
+    ImU32 glow_color = IM_COL32(cursor_r, cursor_g, cursor_b, static_cast<int>(base_alpha * 0.3f));
     
     draw_list->AddRectFilled(
-        ImVec2(target_x, target_y),
-        ImVec2(target_x + char_w, target_y + char_h),
-        cursor_color
+        ImVec2(anim.current_x - 1, anim.current_y - 1),
+        ImVec2(anim.current_x + char_w + 1, anim.current_y + char_h + 1),
+        glow_color,
+        3.0f
+    );
+    
+    draw_list->AddRectFilled(
+        ImVec2(anim.current_x, anim.current_y),
+        ImVec2(anim.current_x + char_w, anim.current_y + char_h),
+        cursor_color,
+        2.0f
     );
 }
 

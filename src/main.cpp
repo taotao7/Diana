@@ -121,15 +121,16 @@ static std::vector<fs::path> build_font_load_order(const std::vector<fs::path>& 
 
     std::vector<fs::path> ordered;
     ordered.reserve(font_files.size());
+    
+    if (primary != fallback) {
+        ordered.push_back(primary);
+    }
+    
     ordered.push_back(fallback);
 
     for (const auto& font : font_files) {
         if (font == fallback || font == primary) continue;
         ordered.push_back(font);
-    }
-
-    if (primary != fallback) {
-        ordered.push_back(primary);
     }
 
     return ordered;
@@ -225,7 +226,7 @@ int main(int argc, char** argv) {
     
     const float font_size = 16.0f;
     const fs::path fonts_dir = find_fonts_directory(argv ? argv[0] : "");
-    // Merge all resource fonts into one atlas: fallback first (unifont), primary face last.
+    // Merge all resource fonts into one atlas: primary face first (Iosekeley), fallback second (unifont).
     std::vector<fs::path> load_order = build_font_load_order(collect_font_files(fonts_dir));
 
     ImFont* font = nullptr;

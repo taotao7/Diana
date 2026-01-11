@@ -10,6 +10,24 @@ struct ImVec2;
 
 namespace diana {
 
+struct CursorAnimation {
+    float current_x = 0.0f;
+    float current_y = 0.0f;
+    float target_x = 0.0f;
+    float target_y = 0.0f;
+    float velocity_x = 0.0f;
+    float velocity_y = 0.0f;
+    
+    static constexpr int TRAIL_LENGTH = 8;
+    float trail_x[TRAIL_LENGTH] = {};
+    float trail_y[TRAIL_LENGTH] = {};
+    float trail_alpha[TRAIL_LENGTH] = {};
+    int trail_head = 0;
+    float trail_timer = 0.0f;
+    
+    bool initialized = false;
+};
+
 class TerminalPanel {
 public:
     TerminalPanel();
@@ -32,7 +50,7 @@ private:
     void render_input_line(TerminalSession& session);
     void render_terminal_line(const TerminalCell* cells, int count);
     void render_screen_row(TerminalSession& session, int screen_row, float line_height);
-    void render_cursor(TerminalSession& session, float target_x, float target_y, float char_w, float char_h, const ImVec2& content_start, float scroll_y);
+    void render_cursor(TerminalSession& session, float target_x, float target_y, float char_w, float char_h);
     void render_banner();
     void handle_start_stop(TerminalSession& session);
     
@@ -47,7 +65,8 @@ private:
     char rename_buffer_[128] = {};
     
     uint32_t confirm_start_session_id_ = 0;
+    
+    std::unordered_map<uint32_t, CursorAnimation> cursor_animations_;
 };
-
 
 }
