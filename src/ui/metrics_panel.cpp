@@ -64,119 +64,85 @@ void MetricsPanel::render_active_section() {
         return;
     }
 
-    TerminalSession* active = terminal_panel_->active_session();
-    if (!active) {
-        ImGui::TextDisabled("Select a session tab to view token metrics.");
-        return;
-    }
-
-    AppKind app = active->config().app;
-    uint32_t& selected_tab_id = (app == AppKind::ClaudeCode) ? selected_claude_tab_id_ : selected_opencode_tab_id_;
-
-    const auto& sessions = terminal_panel_->sessions();
-    std::vector<const TerminalSession*> filtered;
-    for (const auto& session : sessions) {
-        if (session->config().app == app && session->state() == SessionState::Running) {
-            filtered.push_back(session.get());
-        }
-    }
-
-    if (filtered.empty()) {
-        ImGui::TextDisabled("No running %s session.", app == AppKind::ClaudeCode ? "Claude Code" : "OpenCode");
-        ImGui::TextDisabled("Start the selected agent to see token metrics.");
-        return;
-    }
-
-    if (active->state() == SessionState::Running && active->config().app == app) {
-        selected_tab_id = active->id();
-    } else if (selected_tab_id == 0) {
-        selected_tab_id = filtered[0]->id();
-    }
-
-    const char* title = app == AppKind::ClaudeCode ? "Claude Code - Real-time" : "OpenCode - Real-time";
-    ImGui::TextColored(ImVec4(0.7f, 0.7f, 0.7f, 1.0f), "%s", title);
-    ImGui::Separator();
-
-    render_scope_selector(app, selected_tab_id);
-    ImGui::Separator();
-
-    render_stats_for_scope(app, selected_tab_id);
-
-    ImGui::Spacing();
-    size_t files = app == AppKind::ClaudeCode ? claude_collector_->files_processed() : opencode_collector_->files_processed();
-    size_t entries = app == AppKind::ClaudeCode ? claude_collector_->entries_parsed() : opencode_collector_->entries_parsed();
-    ImGui::Text("Files monitored: %zu", files);
-    ImGui::SameLine();
-    ImGui::Text("Entries parsed: %zu", entries);
-}
-
-void MetricsPanel::render_scope_selector(AppKind app, uint32_t& selected_tab_id) {
-    const auto& sessions = terminal_panel_->sessions();
-    std::vector<const TerminalSession*> filtered;
-    for (const auto& session : sessions) {
-        if (session->config().app == app) {
-            filtered.push_back(session.get());
-        }
-    }
-
-    if (filtered.empty()) return;
-
-    if (selected_tab_id == 0) {
-        selected_tab_id = filtered[0]->id();
-    }
-
-    const TerminalSession* selected = nullptr;
-    for (const auto* session : filtered) {
-        if (session->id() == selected_tab_id) {
-            selected = session;
-            break;
-        }
-    }
+    TerminalSession* selected = terminal_panel_->find_session(selected_session_id_);
     if (!selected) {
-        selected = filtered[0];
-        selected_tab_id = selected->id();
+        selected = terminal_panel_->active_session();
+        if (!selected && !terminal_panel_->sessions().empty()) {
+            selected = terminal_panel_->sessions()[0].get();
+        }
+        if (selected) {
+            selected_session_id_ = selected->id();
+        }
     }
 
-    std::string selected_name = selected->name();
+    if (!selected) {
+        ImGui::TextDisabled("No active sessions.");
+        return;
+    }
+
+    AppKind app = selected->config().app;
+    std::string app_name;
+    switch (app) {
+        case AppKind::ClaudeCode: app_name = "Claude Code"; break;
+        case AppKind::OpenCode: app_name = "OpenCode"; break;
+        case AppKind::Codex: app_name = "Codex"; break;
+        case AppKind::Shell: app_name = "Shell"; break;
+    }
+
+    std::string preview = selected->name() + " (" + app_name + ")";
 
     ImGui::Text("Scope:");
     ImGui::SameLine();
-    ImGui::SetNextItemWidth(150);
+    ImGui::SetNextItemWidth(200);
     
-    if (ImGui::BeginCombo("##Scope", selected_name.c_str())) {
-        for (const auto* session : filtered) {
-            std::string label = session->name();
-            std::string project_key = get_project_key(app, session->config().working_dir);
-            
-            if (!hub_->has_source(project_key)) {
-                label += " (no data)";
+    if (ImGui::BeginCombo("##Scope", preview.c_str())) {
+        for (const auto& session : terminal_panel_->sessions()) {
+            std::string s_app_name;
+            switch (session->config().app) {
+                case AppKind::ClaudeCode: s_app_name = "Claude Code"; break;
+                case AppKind::OpenCode: s_app_name = "OpenCode"; break;
+                case AppKind::Codex: s_app_name = "Codex"; break;
+                case AppKind::Shell: s_app_name = "Shell"; break;
             }
             
-            if (ImGui::Selectable(label.c_str(), selected_tab_id == session->id())) {
-                selected_tab_id = session->id();
-            }
+            std::string label = session->name() + " (" + s_app_name + ")";
+            bool is_selected = (selected_session_id_ == session->id());
             
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Project: %s", project_key.c_str());
+            if (ImGui::Selectable(label.c_str(), is_selected)) {
+                selected_session_id_ = session->id();
+            }
+            if (is_selected) {
+                ImGui::SetItemDefaultFocus();
             }
         }
         ImGui::EndCombo();
     }
 
-    for (const auto* session : filtered) {
-        if (session->id() == selected_tab_id) {
-            std::string working_dir = session->config().working_dir;
-            std::string project_key = get_project_key(app, working_dir);
-            ImGui::TextDisabled("Project: %s", truncate_path(project_key, 30).c_str());
-            
-            if (working_dir.empty()) {
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
-                ImGui::TextWrapped("Warning: Using home directory. Select a project directory for accurate per-project metrics.");
-                ImGui::PopStyleColor();
-            }
-            break;
-        }
+    std::string project_key = get_project_key(app, selected->config().working_dir);
+    ImGui::TextDisabled("Project: %s", truncate_path(project_key, 30).c_str());
+    
+    if (selected->config().working_dir.empty()) {
+        ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.6f, 0.0f, 1.0f));
+        ImGui::TextWrapped("Warning: Using home directory. Select a project directory for accurate per-project metrics.");
+        ImGui::PopStyleColor();
     }
+
+    ImGui::Separator();
+    render_stats_for_scope(app, selected->id());
+
+    ImGui::Spacing();
+    size_t files = 0, entries = 0;
+    if (app == AppKind::ClaudeCode) {
+        files = claude_collector_->files_processed();
+        entries = claude_collector_->entries_parsed();
+    } else if (app == AppKind::OpenCode) {
+        files = opencode_collector_->files_processed();
+        entries = opencode_collector_->entries_parsed();
+    }
+    
+    ImGui::Text("Files monitored: %zu", files);
+    ImGui::SameLine();
+    ImGui::Text("Entries parsed: %zu", entries);
 }
 
 void MetricsPanel::render_stats_for_scope(AppKind app, uint32_t selected_tab_id) {

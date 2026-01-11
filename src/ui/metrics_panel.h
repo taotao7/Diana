@@ -21,7 +21,6 @@ public:
 
 private:
     void render_active_section();
-    void render_scope_selector(AppKind app, uint32_t& selected_tab_id);
     void render_stats_for_scope(AppKind app, uint32_t selected_tab_id);
     
     std::string get_project_key(AppKind app, const std::string& working_dir) const;
@@ -34,8 +33,7 @@ private:
     
     TerminalPanel* terminal_panel_ = nullptr;
     
-    uint32_t selected_claude_tab_id_ = 0;
-    uint32_t selected_opencode_tab_id_ = 0;
+    uint32_t selected_session_id_ = 0;
     
     bool show_clear_confirm_ = false;
 };
