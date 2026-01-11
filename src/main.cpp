@@ -1,5 +1,11 @@
 #include <cstdio>
 #include <cstdlib>
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
+#include <optional>
+#include <string>
+#include <vector>
 
 #define GL_SILENCE_DEPRECATION
 #include "imgui.h"
@@ -17,6 +23,117 @@ static void glfw_error_callback(int error, const char* description) {
 }
 
 static GLFWwindow* g_main_window = nullptr;
+namespace fs = std::filesystem;
+
+static bool is_font_file(const fs::path& path) {
+    auto ext = path.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return ext == ".ttf" || ext == ".otf" || ext == ".ttc";
+}
+
+static fs::path find_fonts_directory(const char* argv0) {
+    std::vector<fs::path> candidates;
+
+    std::error_code ec;
+    const fs::path cwd = fs::current_path(ec);
+    if (!ec) {
+        candidates.push_back(cwd / "resources");
+        candidates.push_back(cwd / "resources" / "fonts");
+    }
+
+    if (argv0 && argv0[0] != '\0') {
+        fs::path exe_path = fs::path(argv0);
+        if (exe_path.is_relative() && !cwd.empty()) {
+            exe_path = cwd / exe_path;
+        }
+        const fs::path exe_dir = exe_path.parent_path();
+        if (!exe_dir.empty()) {
+            candidates.push_back(exe_dir / "resources");
+            candidates.push_back(exe_dir / "resources" / "fonts");
+            candidates.push_back(exe_dir.parent_path() / "Resources" / "resources");
+            candidates.push_back(exe_dir.parent_path() / "Resources" / "resources" / "fonts");
+        }
+    }
+
+    for (const auto& candidate : candidates) {
+        std::error_code exists_ec;
+        if (!fs::exists(candidate, exists_ec) || exists_ec) continue;
+
+        std::error_code dir_ec;
+        if (fs::is_directory(candidate, dir_ec) && !dir_ec) {
+            std::error_code canonical_ec;
+            const fs::path canonical = fs::weakly_canonical(candidate, canonical_ec);
+            return canonical_ec ? candidate : canonical;
+        }
+    }
+
+    return {};
+}
+
+static std::vector<fs::path> collect_font_files(const fs::path& fonts_dir) {
+    std::vector<fs::path> files;
+    if (fonts_dir.empty()) {
+        return files;
+    }
+
+    std::error_code ec;
+    if (!fs::exists(fonts_dir, ec) || ec || !fs::is_directory(fonts_dir, ec)) {
+        return files;
+    }
+
+    for (const auto& entry : fs::recursive_directory_iterator(fonts_dir)) {
+        if (!entry.is_regular_file()) continue;
+        if (is_font_file(entry.path())) {
+            files.push_back(entry.path());
+        }
+    }
+
+    std::sort(files.begin(), files.end());
+    return files;
+}
+
+static std::vector<fs::path> build_font_load_order(const std::vector<fs::path>& font_files) {
+    if (font_files.empty()) {
+        return font_files;
+    }
+
+    auto to_lower = [](std::string value) {
+        std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) {
+            return static_cast<char>(std::tolower(c));
+        });
+        return value;
+    };
+
+    const auto find_first_matching = [&](const std::string& needle) -> std::optional<fs::path> {
+        for (const auto& font : font_files) {
+            const std::string name = to_lower(font.stem().string());
+            if (name.find(needle) != std::string::npos) {
+                return font;
+            }
+        }
+        return std::nullopt;
+    };
+
+    const fs::path fallback = find_first_matching("unifont").value_or(font_files.front());
+    const fs::path primary = find_first_matching("regular").value_or(fallback);
+
+    std::vector<fs::path> ordered;
+    ordered.reserve(font_files.size());
+    ordered.push_back(fallback);
+
+    for (const auto& font : font_files) {
+        if (font == fallback || font == primary) continue;
+        ordered.push_back(font);
+    }
+
+    if (primary != fallback) {
+        ordered.push_back(primary);
+    }
+
+    return ordered;
+}
 
 extern "C" bool diana_is_ctrl_pressed() {
     if (!g_main_window) return false;
@@ -32,7 +149,6 @@ extern "C" void diana_request_exit() {
 
 int main(int argc, char** argv) {
     (void)argc;
-    (void)argv;
 
     glfwSetErrorCallback(glfw_error_callback);
     if (!glfwInit()) {
@@ -107,9 +223,30 @@ int main(int argc, char** argv) {
         0,
     };
     
-    ImFont* font = io.Fonts->AddFontFromFileTTF("resources/fonts/unifont.otf", 16.0f, &font_config, ranges);
+    const float font_size = 16.0f;
+    const fs::path fonts_dir = find_fonts_directory(argv ? argv[0] : "");
+    // Merge all resource fonts into one atlas: fallback first (unifont), primary face last.
+    std::vector<fs::path> load_order = build_font_load_order(collect_font_files(fonts_dir));
+
+    ImFont* font = nullptr;
+    if (!load_order.empty()) {
+        ImFontConfig primary_config = font_config;
+        font = io.Fonts->AddFontFromFileTTF(load_order.front().string().c_str(), font_size, &primary_config, ranges);
+        
+        if (font) {
+            ImFontConfig merge_config = font_config;
+            merge_config.MergeMode = true;
+            for (size_t i = 1; i < load_order.size(); ++i) {
+                io.Fonts->AddFontFromFileTTF(load_order[i].string().c_str(), font_size, &merge_config, ranges);
+            }
+        }
+    }
+
     if (!font) {
-        io.Fonts->AddFontDefault();
+        font = io.Fonts->AddFontFromFileTTF("resources/fonts/unifont.otf", font_size, &font_config, ranges);
+        if (!font) {
+            io.Fonts->AddFontDefault();
+        }
     }
 
     const char* glsl_version = "#version 150";
