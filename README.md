@@ -4,7 +4,7 @@
 
 **Your Agent's Best Handler.**
 
-Diana is the ultimate mission control for your AI agents. Just as every Agent 47 needs a Diana, every LLM needs a handler to manage directives (configuration), monitor results (outputs), and keep the budget in check (token calculation).
+Diana is the ultimate mission control for your AI agents. Just as every Agent 47 needs a Diana, every LLM needs a handler to manage directives (configuration), monitor results (outputs), and keep the budget in check (token calculation). It focuses on unified agent config management, at-a-glance token visibility, and fast in-app edits so you can adjust settings without juggling files.
 
 > [!IMPORTANT]
 > **This project is under active development.** Currently only macOS is tested and supported. Other platforms (Linux, Windows) have not been tested.
@@ -32,7 +32,7 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 - Config import/export for backup and sharing
 - Claude Code multi-profile configuration management
 - OpenCode multi-profile configuration management
-- Unified Agent Config panel with tab switching
+- Unified Agent Config panel with tab switching and fast in-app edits
 - GitHub-style activity heatmap for token usage
 
 ## Supported Agents
