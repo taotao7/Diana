@@ -47,8 +47,9 @@ Providers/models can be entered directly in the configuration fields.
 
 ## Screenshots
 
-<img width="4330" height="2224" alt="image" src="https://github.com/user-attachments/assets/de4dcfea-fd5a-43b0-a7e4-bd77ffc2c96e" />
-<img width="4330" height="2224" alt="image" src="https://github.com/user-attachments/assets/5baa322c-8b91-4714-90ce-b240bff293ae" />
+<img width="3840" height="2224" alt="image" src="https://github.com/user-attachments/assets/dcb56de9-0299-4a36-84e1-34572bba22fc" />
+<img width="3840" height="2224" alt="image" src="https://github.com/user-attachments/assets/79c3494f-cf73-499d-9c69-926936efd8a7" />
+
 
 ## Technology Stack
 
