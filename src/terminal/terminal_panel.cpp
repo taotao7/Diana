@@ -379,9 +379,9 @@ void TerminalPanel::render_banner() {
     float tagline_width = ImGui::CalcTextSize(tagline).x;
     float hint_width = ImGui::CalcTextSize(hint).x;
     
-    float start_y = (avail.y - total_height) * 0.5f;
-    if (start_y > 0) {
-        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + start_y);
+    float top_padding = (avail.y - total_height) * 0.5f;
+    if (top_padding > 0.0f) {
+        ImGui::SetCursorPosY(ImGui::GetCursorPosY() + top_padding);
     }
     
     float banner_x = (avail.x - banner_width) * 0.5f;
@@ -406,8 +406,6 @@ void TerminalPanel::render_banner() {
 }
 
 void TerminalPanel::render_output_area(TerminalSession& session) {
-    float footer_height = ImGui::GetStyle().ItemSpacing.y + ImGui::GetFrameHeightWithSpacing();
-    
     const auto& theme = get_current_theme();
     ImVec4 term_bg = u32_to_imvec4(theme.terminal_bg);
     
@@ -415,93 +413,103 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
     
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoNavInputs;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    bool child_open = ImGui::BeginChild("OutputArea", ImVec2(0, -footer_height), true, flags);
+    bool child_open = ImGui::BeginChild("OutputArea", ImVec2(0, 0), true, flags);
     ImGui::PopStyleVar();
     if (child_open) {
+        ImVec2 content_size = ImGui::GetContentRegionAvail();
+        ImVec2 char_size = ImGui::CalcTextSize("W");
+        ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
+        float line_height = ImGui::GetTextLineHeight();
+        
+        int new_cols = std::max(1, static_cast<int>(content_size.x / char_size.x));
+        int new_rows = std::max(1, static_cast<int>(std::ceil(content_size.y / line_height)));
+        
+        const auto& terminal = session.terminal();
+        if (new_cols != terminal.cols() || new_rows != terminal.rows()) {
+            controller_.resize_pty(session, new_rows, new_cols);
+        }
+        
+        ImGui::PopStyleVar();
+        
         if (session.state() == SessionState::Idle && session.terminal().scrollback().empty()) {
             render_banner();
+            ImGui::Dummy(ImVec2(1.0f, ImGui::GetContentRegionAvail().y));
         } else {
-            ImVec2 char_size = ImGui::CalcTextSize("W");
-            ImVec2 content_size = ImGui::GetContentRegionAvail();
-            
-            // Each line uses char_size.y + ItemSpacing.y (from NewLine), except the last line
-            float item_spacing = ImGui::GetStyle().ItemSpacing.y;
-            float line_height = char_size.y + item_spacing;
-            
-            int new_cols = std::max(1, static_cast<int>(content_size.x / char_size.x));
-            int new_rows = std::max(1, static_cast<int>((content_size.y + item_spacing) / line_height));
-            
-            const auto& terminal = session.terminal();
-            if (new_cols != terminal.cols() || new_rows != terminal.rows()) {
-                controller_.resize_pty(session, new_rows, new_cols);
-            }
-            
-            ImVec2 content_start = ImGui::GetCursorScreenPos();
-            float scroll_y = ImGui::GetScrollY();
-            
-            const auto& scrollback = terminal.scrollback();
-            bool has_scrollback = !scrollback.empty();
-            
-            if (has_scrollback) {
-                int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
+                ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(ImGui::GetStyle().ItemSpacing.x, 0.0f));
                 
-                ImGuiListClipper clipper;
-                clipper.Begin(total_lines, line_height);
+                ImVec2 content_start = ImGui::GetCursorScreenPos();
+                float scroll_y = ImGui::GetScrollY();
                 
-                while (clipper.Step()) {
-                    for (int line_idx = clipper.DisplayStart; line_idx < clipper.DisplayEnd; ++line_idx) {
-                        bool is_scrollback = line_idx < static_cast<int>(scrollback.size());
-                        
-                        if (is_scrollback) {
-                            const auto& line = scrollback[static_cast<size_t>(line_idx)];
-                            render_terminal_line(line.data(), static_cast<int>(line.size()));
-                        } else {
-                            int screen_row = line_idx - static_cast<int>(scrollback.size());
-                            render_screen_row(session, screen_row, char_size.y);
+                const auto& scrollback = terminal.scrollback();
+                bool has_scrollback = !scrollback.empty();
+                
+                if (has_scrollback) {
+                    int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
+                    
+                    ImGuiListClipper clipper;
+                    clipper.Begin(total_lines, line_height);
+                    
+                    while (clipper.Step()) {
+                        for (int line_idx = clipper.DisplayStart; line_idx < clipper.DisplayEnd; ++line_idx) {
+                            bool is_scrollback = line_idx < static_cast<int>(scrollback.size());
+                            
+                            if (is_scrollback) {
+                                const auto& line = scrollback[static_cast<size_t>(line_idx)];
+                                render_terminal_line(line.data(), static_cast<int>(line.size()));
+                            } else {
+                                int screen_row = line_idx - static_cast<int>(scrollback.size());
+                                render_screen_row(session, screen_row, line_height);
+                            }
                         }
                     }
-                }
-                
-                float scroll_max_y = ImGui::GetScrollMaxY();
-                bool at_bottom = (scroll_max_y <= 0.0f) || (scroll_y >= scroll_max_y - 1.0f);
-                
-                if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
-                    session.set_user_scrolled_up(!at_bottom);
-                }
-                
-                if (at_bottom) {
-                    session.set_user_scrolled_up(false);
-                }
-                
-                if (session.scroll_to_bottom() || (!session.user_scrolled_up() && session.state() == SessionState::Running)) {
-                    ImGui::SetScrollHereY(1.0f);
-                    session.set_scroll_to_bottom(false);
-                }
-                
-                if (session.config().app == AppKind::Shell) {
-                    auto cursor = terminal.get_cursor();
-                    int cursor_line_idx = static_cast<int>(scrollback.size()) + cursor.row;
-                    float target_x = content_start.x + cursor.col * char_size.x;
-                    float target_y = content_start.y + cursor_line_idx * char_size.y - scroll_y;
                     
-                    ImVec2 clip_min = ImGui::GetWindowPos();
-                    ImVec2 clip_max = ImVec2(clip_min.x + ImGui::GetWindowSize().x, clip_min.y + ImGui::GetWindowSize().y);
-                    if (target_y >= clip_min.y - char_size.y && target_y <= clip_max.y) {
-                        render_cursor(session, target_x, target_y, char_size.x, char_size.y);
+                    float scroll_max_y = ImGui::GetScrollMaxY();
+                    bool at_bottom = (scroll_max_y <= 0.0f) || (scroll_y >= scroll_max_y - 1.0f);
+                    
+                    if (ImGui::IsWindowHovered() && ImGui::GetIO().MouseWheel != 0.0f) {
+                        session.set_user_scrolled_up(!at_bottom);
+                    }
+                    
+                    if (at_bottom) {
+                        session.set_user_scrolled_up(false);
+                    }
+                    
+                    if (session.scroll_to_bottom() || (!session.user_scrolled_up() && session.state() == SessionState::Running)) {
+                        ImGui::SetScrollHereY(1.0f);
+                        session.set_scroll_to_bottom(false);
+                    }
+                    
+                    if (session.config().app == AppKind::Shell) {
+                        auto cursor = terminal.get_cursor();
+                        int cursor_line_idx = static_cast<int>(scrollback.size()) + cursor.row;
+                        float target_x = content_start.x + cursor.col * char_size.x;
+                        float target_y = content_start.y + cursor_line_idx * line_height - scroll_y;
+                        
+                        ImVec2 clip_min = ImGui::GetWindowPos();
+                        ImVec2 clip_max = ImVec2(clip_min.x + ImGui::GetWindowSize().x, clip_min.y + ImGui::GetWindowSize().y);
+                        if (target_y >= clip_min.y - line_height && target_y <= clip_max.y) {
+                            render_cursor(session, target_x, target_y, char_size.x, line_height);
+                        }
+                    }
+                } else {
+                    for (int row = 0; row < terminal.rows(); ++row) {
+                        render_screen_row(session, row, line_height);
+                    }
+                    
+                    if (session.config().app == AppKind::Shell) {
+                        auto cursor = terminal.get_cursor();
+                        float target_x = content_start.x + cursor.col * char_size.x;
+                        float target_y = content_start.y + cursor.row * line_height;
+                        render_cursor(session, target_x, target_y, char_size.x, line_height);
                     }
                 }
-            } else {
-                for (int row = 0; row < terminal.rows(); ++row) {
-                    render_screen_row(session, row, char_size.y);
+                
+                float remaining = ImGui::GetContentRegionAvail().y;
+                if (remaining > 0.0f) {
+                    ImGui::Dummy(ImVec2(1.0f, remaining));
                 }
                 
-                if (session.config().app == AppKind::Shell) {
-                    auto cursor = terminal.get_cursor();
-                    float target_x = content_start.x + cursor.col * char_size.x;
-                    float target_y = content_start.y + cursor.row * char_size.y;
-                    render_cursor(session, target_x, target_y, char_size.x, char_size.y);
-                }
-            }
+                ImGui::PopStyleVar();
         }
     }
     ImGui::EndChild();
@@ -792,6 +800,9 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                 }
                 else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
                     controller_.send_key(session, VTERM_KEY_BACKSPACE);
+                }
+                else if (ImGui::IsKeyPressed(ImGuiKey_Tab) && io.KeyShift) {
+                    controller_.send_raw_key(session, "\x1b[Z");
                 }
                 else if (ImGui::IsKeyPressed(ImGuiKey_Tab)) {
                     controller_.send_key(session, VTERM_KEY_TAB);
