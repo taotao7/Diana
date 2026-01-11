@@ -77,7 +77,7 @@ private:
     ScrollbackCallback scrollback_cb_;
     
     uint32_t default_fg_ = 0xFFD4D4D4;
-    uint32_t default_bg_ = 0xFF1A1D21;
+    uint32_t default_bg_ = 0xFF211D1A;
 };
 
 }

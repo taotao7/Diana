@@ -413,7 +413,7 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
     
     ImGui::PushStyleColor(ImGuiCol_ChildBg, term_bg);
     
-    ImGuiWindowFlags flags = ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoNavInputs;
+    ImGuiWindowFlags flags = ImGuiWindowFlags_NoNavInputs;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
     bool child_open = ImGui::BeginChild("OutputArea", ImVec2(0, -footer_height), true, flags);
     ImGui::PopStyleVar();
@@ -424,8 +424,12 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
             ImVec2 char_size = ImGui::CalcTextSize("W");
             ImVec2 content_size = ImGui::GetContentRegionAvail();
             
+            // Each line uses char_size.y + ItemSpacing.y (from NewLine), except the last line
+            float item_spacing = ImGui::GetStyle().ItemSpacing.y;
+            float line_height = char_size.y + item_spacing;
+            
             int new_cols = std::max(1, static_cast<int>(content_size.x / char_size.x));
-            int new_rows = std::max(1, static_cast<int>(content_size.y / char_size.y));
+            int new_rows = std::max(1, static_cast<int>((content_size.y + item_spacing) / line_height));
             
             const auto& terminal = session.terminal();
             if (new_cols != terminal.cols() || new_rows != terminal.rows()) {
@@ -442,7 +446,7 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                 int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
                 
                 ImGuiListClipper clipper;
-                clipper.Begin(total_lines);
+                clipper.Begin(total_lines, line_height);
                 
                 while (clipper.Step()) {
                     for (int line_idx = clipper.DisplayStart; line_idx < clipper.DisplayEnd; ++line_idx) {
@@ -469,7 +473,7 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                     session.set_user_scrolled_up(false);
                 }
                 
-                if (session.scroll_to_bottom()) {
+                if (session.scroll_to_bottom() || (!session.user_scrolled_up() && session.state() == SessionState::Running)) {
                     ImGui::SetScrollHereY(1.0f);
                     session.set_scroll_to_bottom(false);
                 }
@@ -615,10 +619,42 @@ void TerminalPanel::render_screen_row(TerminalSession& session, int screen_row, 
     render_terminal_line(row_cells.data(), static_cast<int>(row_cells.size()));
 }
 
+static bool is_dark_color(uint32_t abgr) {
+    uint8_t r = abgr & 0xFF;
+    uint8_t g = (abgr >> 8) & 0xFF;
+    uint8_t b = (abgr >> 16) & 0xFF;
+    int brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness < 40;
+}
+
 void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count) {
     if (count <= 0) {
         ImGui::NewLine();
         return;
+    }
+    
+    const auto& theme = get_current_theme();
+    uint32_t default_bg = theme.terminal_bg;
+    
+    ImVec2 start_pos = ImGui::GetCursorScreenPos();
+    ImVec2 char_size = ImGui::CalcTextSize("W");
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    
+    float x_offset = 0.0f;
+    for (int i = 0; i < count; ++i) {
+        const auto& cell = cells[i];
+        if (cell.width == 0) continue;
+        
+        bool has_custom_bg = (cell.bg & 0xFF000000) != 0 && 
+                             cell.bg != default_bg &&
+                             !is_dark_color(cell.bg);
+        if (has_custom_bg) {
+            float cell_width = char_size.x * cell.width;
+            ImVec2 bg_min(start_pos.x + x_offset, start_pos.y);
+            ImVec2 bg_max(bg_min.x + cell_width, bg_min.y + char_size.y);
+            draw_list->AddRectFilled(bg_min, bg_max, cell.bg);
+        }
+        x_offset += char_size.x * cell.width;
     }
     
     std::string text;
