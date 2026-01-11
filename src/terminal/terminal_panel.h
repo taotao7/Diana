@@ -18,6 +18,9 @@ struct CursorAnimation {
     float velocity_x = 0.0f;
     float velocity_y = 0.0f;
     
+    float current_width = 1.0f;
+    float target_width = 1.0f;
+    
     static constexpr int TRAIL_LENGTH = 8;
     float trail_x[TRAIL_LENGTH] = {};
     float trail_y[TRAIL_LENGTH] = {};
@@ -50,7 +53,7 @@ private:
     void render_input_line(TerminalSession& session);
     void render_terminal_line(const TerminalCell* cells, int count);
     void render_screen_row(TerminalSession& session, int screen_row, float line_height);
-    void render_cursor(TerminalSession& session, float target_x, float target_y, float char_w, float char_h);
+    void render_cursor(TerminalSession& session, float target_x, float target_y, float char_w, float char_h, int cell_width);
     void render_banner();
     void handle_start_stop(TerminalSession& session);
     

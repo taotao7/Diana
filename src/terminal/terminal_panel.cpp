@@ -484,11 +484,13 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                         int cursor_line_idx = static_cast<int>(scrollback.size()) + cursor.row;
                         float target_x = content_start.x + cursor.col * char_size.x;
                         float target_y = content_start.y + cursor_line_idx * line_height - scroll_y;
+                        auto cursor_cell = terminal.get_cell(cursor.row, cursor.col);
+                        int cursor_cell_width = cursor_cell.width > 0 ? cursor_cell.width : 1;
                         
                         ImVec2 clip_min = ImGui::GetWindowPos();
                         ImVec2 clip_max = ImVec2(clip_min.x + ImGui::GetWindowSize().x, clip_min.y + ImGui::GetWindowSize().y);
                         if (target_y >= clip_min.y - line_height && target_y <= clip_max.y) {
-                            render_cursor(session, target_x, target_y, char_size.x, line_height);
+                            render_cursor(session, target_x, target_y, char_size.x, line_height, cursor_cell_width);
                         }
                     }
                 } else {
@@ -500,7 +502,9 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                         auto cursor = terminal.get_cursor();
                         float target_x = content_start.x + cursor.col * char_size.x;
                         float target_y = content_start.y + cursor.row * line_height;
-                        render_cursor(session, target_x, target_y, char_size.x, line_height);
+                        auto cursor_cell = terminal.get_cell(cursor.row, cursor.col);
+                        int cursor_cell_width = cursor_cell.width > 0 ? cursor_cell.width : 1;
+                        render_cursor(session, target_x, target_y, char_size.x, line_height, cursor_cell_width);
                     }
                 }
                 
@@ -516,16 +520,20 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
     ImGui::PopStyleColor();
 }
 
-void TerminalPanel::render_cursor(TerminalSession& session, float target_x, float target_y, float char_w, float char_h) {
+void TerminalPanel::render_cursor(TerminalSession& session, float target_x, float target_y, float char_w, float char_h, int cell_width) {
     auto& anim = cursor_animations_[session.id()];
     float dt = ImGui::GetIO().DeltaTime;
     const auto& theme = get_current_theme();
+    
+    float base_cursor_w = char_w * cell_width;
     
     if (!anim.initialized) {
         anim.current_x = target_x;
         anim.current_y = target_y;
         anim.target_x = target_x;
         anim.target_y = target_y;
+        anim.current_width = 1.0f;
+        anim.target_width = 1.0f;
         for (int i = 0; i < CursorAnimation::TRAIL_LENGTH; ++i) {
             anim.trail_x[i] = target_x;
             anim.trail_y[i] = target_y;
@@ -534,11 +542,12 @@ void TerminalPanel::render_cursor(TerminalSession& session, float target_x, floa
         anim.initialized = true;
     }
     
+    bool cursor_moved = (anim.target_x != target_x || anim.target_y != target_y);
     anim.target_x = target_x;
     anim.target_y = target_y;
     
-    constexpr float SPRING_STIFFNESS = 35.0f;
-    constexpr float DAMPING = 8.0f;
+    constexpr float SPRING_STIFFNESS = 100.0f;
+    constexpr float DAMPING = 12.0f;
     
     float dx = anim.target_x - anim.current_x;
     float dy = anim.target_y - anim.current_y;
@@ -552,6 +561,19 @@ void TerminalPanel::render_cursor(TerminalSession& session, float target_x, floa
     anim.current_y += anim.velocity_y * dt;
     
     float speed = std::sqrt(anim.velocity_x * anim.velocity_x + anim.velocity_y * anim.velocity_y);
+    
+    constexpr float NARROW_WIDTH = 0.15f;
+    constexpr float FULL_WIDTH = 1.0f;
+    constexpr float WIDTH_LERP_SPEED = 12.0f;
+    
+    if (cursor_moved || speed > 10.0f) {
+        anim.target_width = NARROW_WIDTH;
+    } else {
+        anim.target_width = FULL_WIDTH;
+    }
+    anim.current_width += (anim.target_width - anim.current_width) * WIDTH_LERP_SPEED * dt;
+    
+    float actual_cursor_w = base_cursor_w * anim.current_width;
     
     constexpr float TRAIL_INTERVAL = 0.012f;
     anim.trail_timer += dt;
@@ -579,9 +601,9 @@ void TerminalPanel::render_cursor(TerminalSession& session, float target_x, floa
         if (alpha < 0.01f) continue;
         
         float size_factor = 1.0f - (static_cast<float>(i) / CursorAnimation::TRAIL_LENGTH) * 0.6f;
-        float trail_w = char_w * size_factor;
+        float trail_w = actual_cursor_w * size_factor;
         float trail_h = char_h * size_factor;
-        float offset_x = (char_w - trail_w) * 0.5f;
+        float offset_x = (actual_cursor_w - trail_w) * 0.5f;
         float offset_y = (char_h - trail_h) * 0.5f;
         
         ImU32 trail_color = IM_COL32(cursor_r, cursor_g, cursor_b, static_cast<int>(alpha * 100));
@@ -601,14 +623,14 @@ void TerminalPanel::render_cursor(TerminalSession& session, float target_x, floa
     
     draw_list->AddRectFilled(
         ImVec2(anim.current_x - 1, anim.current_y - 1),
-        ImVec2(anim.current_x + char_w + 1, anim.current_y + char_h + 1),
+        ImVec2(anim.current_x + actual_cursor_w + 1, anim.current_y + char_h + 1),
         glow_color,
         3.0f
     );
     
     draw_list->AddRectFilled(
         ImVec2(anim.current_x, anim.current_y),
-        ImVec2(anim.current_x + char_w, anim.current_y + char_h),
+        ImVec2(anim.current_x + actual_cursor_w, anim.current_y + char_h),
         cursor_color,
         2.0f
     );
@@ -635,6 +657,30 @@ static bool is_dark_color(uint32_t abgr) {
     return brightness < 40;
 }
 
+static bool is_light_color(uint32_t abgr) {
+    uint8_t r = abgr & 0xFF;
+    uint8_t g = (abgr >> 8) & 0xFF;
+    uint8_t b = (abgr >> 16) & 0xFF;
+    int brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness > 180;
+}
+
+static uint32_t adjust_fg_for_light_theme(uint32_t fg, bool is_light_theme) {
+    if (!is_light_theme) return fg;
+    if (!is_light_color(fg)) return fg;
+    
+    uint8_t r = fg & 0xFF;
+    uint8_t g = (fg >> 8) & 0xFF;
+    uint8_t b = (fg >> 16) & 0xFF;
+    uint8_t a = (fg >> 24) & 0xFF;
+    
+    r = static_cast<uint8_t>(r * 0.4f);
+    g = static_cast<uint8_t>(g * 0.4f);
+    b = static_cast<uint8_t>(b * 0.4f);
+    
+    return r | (g << 8) | (b << 16) | (a << 24);
+}
+
 void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count) {
     if (count <= 0) {
         ImGui::NewLine();
@@ -643,57 +689,58 @@ void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count) {
     
     const auto& theme = get_current_theme();
     uint32_t default_bg = theme.terminal_bg;
+    bool is_light_theme = (theme.kind == ThemeKind::Light);
     
     ImVec2 start_pos = ImGui::GetCursorScreenPos();
     ImVec2 char_size = ImGui::CalcTextSize("W");
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
     
-    float x_offset = 0.0f;
+    int col = 0;
     for (int i = 0; i < count; ++i) {
         const auto& cell = cells[i];
-        if (cell.width == 0) continue;
+        
+        if (cell.width == 0) {
+            continue;
+        }
+        
+        float cell_x = start_pos.x + i * char_size.x;
+        float cell_width_px = char_size.x * cell.width;
         
         bool has_custom_bg = (cell.bg & 0xFF000000) != 0 && 
                              cell.bg != default_bg &&
                              !is_dark_color(cell.bg);
         if (has_custom_bg) {
-            float cell_width = char_size.x * cell.width;
-            ImVec2 bg_min(start_pos.x + x_offset, start_pos.y);
-            ImVec2 bg_max(bg_min.x + cell_width, bg_min.y + char_size.y);
+            ImVec2 bg_min(cell_x, start_pos.y);
+            ImVec2 bg_max(cell_x + cell_width_px, start_pos.y + char_size.y);
             draw_list->AddRectFilled(bg_min, bg_max, cell.bg);
         }
-        x_offset += char_size.x * cell.width;
-    }
-    
-    std::string text;
-    text.reserve(static_cast<size_t>(count) * 4);
-    uint32_t current_fg = cells[0].fg;
-    
-    auto flush_text = [&]() {
-        if (!text.empty()) {
-            ImGui::PushStyleColor(ImGuiCol_Text, u32_to_imvec4(current_fg));
-            ImGui::TextUnformatted(text.c_str(), text.c_str() + text.size());
-            ImGui::PopStyleColor();
-            ImGui::SameLine(0.0f, 0.0f);
-            text.clear();
-        }
-    };
-    
-    for (int i = 0; i < count; ++i) {
-        const auto& cell = cells[i];
         
-        if (cell.width == 0) continue;
-        
-        if (cell.fg != current_fg) {
-            flush_text();
-            current_fg = cell.fg;
+        if (cell.chars[0] != 0 && cell.chars[0] != ' ' && cell.chars[0] <= 0x10FFFF) {
+            char utf8_buf[32];
+            int utf8_len = 0;
+            for (int j = 0; j < TERMINAL_MAX_CHARS_PER_CELL && cell.chars[j] != 0; ++j) {
+                uint32_t cp = cell.chars[j];
+                if (cp > 0x10FFFF) break;
+                char tmp[8];
+                int len;
+                utf8_encode(cp, tmp, &len);
+                if (utf8_len + len < 31) {
+                    memcpy(utf8_buf + utf8_len, tmp, static_cast<size_t>(len));
+                    utf8_len += len;
+                }
+            }
+            utf8_buf[utf8_len] = '\0';
+            
+            if (utf8_len > 0) {
+                uint32_t fg = adjust_fg_for_light_theme(cell.fg, is_light_theme);
+                draw_list->AddText(ImVec2(cell_x, start_pos.y), fg, utf8_buf);
+            }
         }
         
-        cell_to_utf8(cell.chars, text);
+        col += cell.width;
     }
     
-    flush_text();
-    ImGui::NewLine();
+    ImGui::Dummy(ImVec2(count * char_size.x, char_size.y));
 }
 
 void TerminalPanel::render_input_line(TerminalSession& session) {
