@@ -440,6 +440,28 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                 ImVec2 content_start = ImGui::GetCursorScreenPos();
                 float scroll_y = ImGui::GetScrollY();
                 
+                if (session.config().app == AppKind::Shell) {
+                    auto cursor = terminal.get_cursor();
+                    const auto& sb = terminal.scrollback();
+                    
+                    float target_x = content_start.x + cursor.col * char_size.x;
+                    float target_y;
+                    
+                    if (!sb.empty()) {
+                        int cursor_line_idx = static_cast<int>(sb.size()) + cursor.row;
+                        target_y = content_start.y + cursor_line_idx * line_height - scroll_y;
+                        
+                        ImVec2 clip_min = ImGui::GetWindowPos();
+                        ImVec2 clip_max = ImVec2(clip_min.x + ImGui::GetWindowSize().x, clip_min.y + ImGui::GetWindowSize().y);
+                        if (target_y >= clip_min.y - line_height && target_y <= clip_max.y) {
+                            render_cursor(session, target_x, target_y, char_size.x, line_height);
+                        }
+                    } else {
+                        target_y = content_start.y + cursor.row * line_height;
+                        render_cursor(session, target_x, target_y, char_size.x, line_height);
+                    }
+                }
+                
                 const auto& scrollback = terminal.scrollback();
                 bool has_scrollback = !scrollback.empty();
                 
@@ -478,29 +500,9 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                         ImGui::SetScrollHereY(1.0f);
                         session.set_scroll_to_bottom(false);
                     }
-                    
-                    if (session.config().app == AppKind::Shell) {
-                        auto cursor = terminal.get_cursor();
-                        int cursor_line_idx = static_cast<int>(scrollback.size()) + cursor.row;
-                        float target_x = content_start.x + cursor.col * char_size.x;
-                        float target_y = content_start.y + cursor_line_idx * line_height - scroll_y;
-                        
-                        ImVec2 clip_min = ImGui::GetWindowPos();
-                        ImVec2 clip_max = ImVec2(clip_min.x + ImGui::GetWindowSize().x, clip_min.y + ImGui::GetWindowSize().y);
-                        if (target_y >= clip_min.y - line_height && target_y <= clip_max.y) {
-                            render_cursor(session, target_x, target_y, char_size.x, line_height);
-                        }
-                    }
                 } else {
                     for (int row = 0; row < terminal.rows(); ++row) {
                         render_screen_row(session, row, line_height);
-                    }
-                    
-                    if (session.config().app == AppKind::Shell) {
-                        auto cursor = terminal.get_cursor();
-                        float target_x = content_start.x + cursor.col * char_size.x;
-                        float target_y = content_start.y + cursor.row * line_height;
-                        render_cursor(session, target_x, target_y, char_size.x, line_height);
                     }
                 }
                 

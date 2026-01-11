@@ -64,11 +64,26 @@ void MetricsPanel::render_active_section() {
         return;
     }
 
+    auto is_valid_session = [](const TerminalSession& s) {
+        return s.config().app != AppKind::Shell && s.state() != SessionState::Idle;
+    };
+
     TerminalSession* selected = terminal_panel_->find_session(selected_session_id_);
+    
+    if (selected && !is_valid_session(*selected)) {
+        selected = nullptr;
+    }
+
     if (!selected) {
         selected = terminal_panel_->active_session();
-        if (!selected && !terminal_panel_->sessions().empty()) {
-            selected = terminal_panel_->sessions()[0].get();
+        if (!selected || !is_valid_session(*selected)) {
+            selected = nullptr;
+            for (const auto& session : terminal_panel_->sessions()) {
+                if (is_valid_session(*session)) {
+                    selected = session.get();
+                    break;
+                }
+            }
         }
         if (selected) {
             selected_session_id_ = selected->id();
@@ -76,7 +91,7 @@ void MetricsPanel::render_active_section() {
     }
 
     if (!selected) {
-        ImGui::TextDisabled("No active sessions.");
+        ImGui::TextDisabled("No active agents.");
         return;
     }
 
@@ -97,6 +112,8 @@ void MetricsPanel::render_active_section() {
     
     if (ImGui::BeginCombo("##Scope", preview.c_str())) {
         for (const auto& session : terminal_panel_->sessions()) {
+            if (!is_valid_session(*session)) continue;
+
             std::string s_app_name;
             switch (session->config().app) {
                 case AppKind::ClaudeCode: s_app_name = "Claude Code"; break;
