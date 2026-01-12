@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <future>
 #include <nlohmann/json.hpp>
 #include <cstdlib>
 
@@ -31,6 +32,7 @@ OpencodeUsageCollector::OpencodeUsageCollector()
     if (!data_dir_.empty()) {
         storage_dir_ = data_dir_ + "/storage";
     }
+    init_future_ = std::async(std::launch::async, &OpencodeUsageCollector::do_initial_scan, this);
 }
 
 OpencodeUsageCollector::OpencodeUsageCollector(const std::string& data_dir)
@@ -38,6 +40,13 @@ OpencodeUsageCollector::OpencodeUsageCollector(const std::string& data_dir)
 {
     if (!data_dir_.empty()) {
         storage_dir_ = data_dir_ + "/storage";
+    }
+    init_future_ = std::async(std::launch::async, &OpencodeUsageCollector::do_initial_scan, this);
+}
+
+OpencodeUsageCollector::~OpencodeUsageCollector() {
+    if (init_future_.valid()) {
+        init_future_.wait();
     }
 }
 
@@ -47,18 +56,41 @@ std::string OpencodeUsageCollector::default_data_dir() {
     return base + "/opencode";
 }
 
+void OpencodeUsageCollector::do_initial_scan() {
+    if (storage_dir_.empty()) {
+        init_done_ = true;
+        return;
+    }
+    
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        scan_directories();
+        
+        for (const auto& path : message_paths_) {
+            process_file(path);
+        }
+    }
+    
+    last_scan_ = std::chrono::steady_clock::now();
+    last_poll_ = std::chrono::steady_clock::now();
+    init_done_ = true;
+}
+
 void OpencodeUsageCollector::poll() {
     if (storage_dir_.empty()) return;
+    
+    if (!init_done_) return;
 
     auto now = std::chrono::steady_clock::now();
     
-    if (last_scan_.time_since_epoch().count() == 0 ||
-        std::chrono::duration_cast<std::chrono::seconds>(now - last_scan_).count() >= 5) {
+    if (std::chrono::duration_cast<std::chrono::seconds>(now - last_scan_).count() >= 5) {
+        std::lock_guard<std::mutex> lock(mutex_);
         scan_directories();
         last_scan_ = now;
     }
     
     if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_poll_).count() >= 500) {
+        std::lock_guard<std::mutex> lock(mutex_);
         for (const auto& path : message_paths_) {
             process_file(path);
         }

@@ -77,7 +77,34 @@ ImVec4 u32_to_imvec4(uint32_t color) {
 }
 
 TerminalPanel::TerminalPanel() {
-    create_session();
+    load_sessions();
+    if (sessions_.empty()) {
+        create_session();
+    }
+}
+
+void TerminalPanel::save_sessions() {
+    std::vector<SavedSessionConfig> configs;
+    for (const auto& session : sessions_) {
+        SavedSessionConfig cfg;
+        cfg.name = session->name();
+        cfg.app = session->config().app;
+        cfg.working_dir = session->config().working_dir;
+        configs.push_back(cfg);
+    }
+    config_store_.save(configs);
+}
+
+void TerminalPanel::load_sessions() {
+    auto configs = config_store_.load();
+    for (const auto& cfg : configs) {
+        uint32_t id = next_session_id_++;
+        auto session = std::make_unique<TerminalSession>(id);
+        session->set_name(cfg.name);
+        session->config().app = cfg.app;
+        session->config().working_dir = cfg.working_dir;
+        sessions_.push_back(std::move(session));
+    }
 }
 
 void TerminalPanel::render() {
@@ -114,6 +141,7 @@ void TerminalPanel::render() {
                             ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
                             if (rename_buffer_[0] != '\0') {
                                 session->set_name(rename_buffer_);
+                                save_sessions();
                             }
                             renaming_session_id_ = 0;
                         }
@@ -255,6 +283,8 @@ TerminalSession* TerminalPanel::find_session(uint32_t id) {
 uint32_t TerminalPanel::create_session() {
     uint32_t id = next_session_id_++;
     sessions_.push_back(std::make_unique<TerminalSession>(id));
+    save_sessions();
+    ImGui::SaveIniSettingsToDisk(ImGui::GetIO().IniFilename);
     return id;
 }
 
@@ -268,6 +298,8 @@ void TerminalPanel::close_session(uint32_t id) {
         if (active_session_idx_ >= sessions_.size() && !sessions_.empty()) {
             active_session_idx_ = static_cast<uint32_t>(sessions_.size() - 1);
         }
+        save_sessions();
+        ImGui::SaveIniSettingsToDisk(ImGui::GetIO().IniFilename);
     }
 }
 
@@ -280,6 +312,7 @@ void TerminalPanel::render_control_bar(TerminalSession& session) {
     if (!can_change) ImGui::BeginDisabled();
     if (ImGui::Combo("##App", &app_idx, APP_NAMES, APP_COUNT)) {
         session.config().app = static_cast<AppKind>(app_idx);
+        save_sessions();
     }
     if (!can_change) ImGui::EndDisabled();
     
@@ -304,6 +337,7 @@ void TerminalPanel::render_control_bar(TerminalSession& session) {
         if (result == NFD_OKAY && out_path) {
             session.config().working_dir = out_path;
             NFD_FreePath(out_path);
+            save_sessions();
         }
     }
     if (!can_change) ImGui::EndDisabled();

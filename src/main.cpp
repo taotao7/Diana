@@ -116,21 +116,21 @@ static std::vector<fs::path> build_font_load_order(const std::vector<fs::path>& 
         return std::nullopt;
     };
 
-    const fs::path fallback = find_first_matching("unifont").value_or(font_files.front());
-    const fs::path primary = find_first_matching("regular").value_or(fallback);
-
     std::vector<fs::path> ordered;
-    ordered.reserve(font_files.size());
+    ordered.reserve(2);
     
-    if (primary != fallback) {
-        ordered.push_back(primary);
+    auto regular = find_first_matching("regular");
+    auto unifont = find_first_matching("unifont");
+    
+    if (regular) {
+        ordered.push_back(*regular);
+    }
+    if (unifont) {
+        ordered.push_back(*unifont);
     }
     
-    ordered.push_back(fallback);
-
-    for (const auto& font : font_files) {
-        if (font == fallback || font == primary) continue;
-        ordered.push_back(font);
+    if (ordered.empty() && !font_files.empty()) {
+        ordered.push_back(font_files.front());
     }
 
     return ordered;
@@ -186,6 +186,15 @@ int main(int argc, char** argv) {
     ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+    io.IniSavingRate = 1.0f;
+
+    static std::string ini_path;
+    const char* home = std::getenv("HOME");
+    if (home) {
+        ini_path = std::string(home) + "/.config/diana/imgui.ini";
+        fs::create_directories(fs::path(ini_path).parent_path());
+        io.IniFilename = ini_path.c_str();
+    }
 
     ImGui::StyleColorsDark();
     diana::update_system_theme();
@@ -197,54 +206,52 @@ int main(int argc, char** argv) {
     }
 
     ImFontConfig font_config;
-    font_config.OversampleH = 2;
+    font_config.OversampleH = 1;
     font_config.OversampleV = 1;
     
-    static const ImWchar ranges[] = {
+    static const ImWchar primary_ranges[] = {
+        0x0020, 0x00FF,
+        0x2500, 0x257F,
+        0x2580, 0x259F,
+        0x25A0, 0x25FF,
+        0,
+    };
+    
+    static const ImWchar fallback_ranges[] = {
         0x0020, 0x00FF,
         0x2000, 0x206F,
         0x2100, 0x214F,
         0x2190, 0x21FF,
-        0x2200, 0x22FF,
-        0x2300, 0x23FF,
         0x2500, 0x257F,
         0x2580, 0x259F,
         0x25A0, 0x25FF,
         0x2600, 0x26FF,
-        0x2700, 0x27BF,
-        0x2B00, 0x2BFF,
         0x3000, 0x303F,
-        0x3040, 0x309F,
-        0x30A0, 0x30FF,
-        0x4E00, 0x9FFF,
-        0xF000, 0xF0FF,
-        0xFE00, 0xFE0F,
+        0x4E00, 0x9FA5,
         0xFF00, 0xFFEF,
-        0x1F300, 0x1F9FF,
         0,
     };
     
     const float font_size = 16.0f;
     const fs::path fonts_dir = find_fonts_directory(argv ? argv[0] : "");
-    // Merge all resource fonts into one atlas: primary face first (Iosekeley), fallback second (unifont).
     std::vector<fs::path> load_order = build_font_load_order(collect_font_files(fonts_dir));
 
     ImFont* font = nullptr;
     if (!load_order.empty()) {
         ImFontConfig primary_config = font_config;
-        font = io.Fonts->AddFontFromFileTTF(load_order.front().string().c_str(), font_size, &primary_config, ranges);
+        font = io.Fonts->AddFontFromFileTTF(load_order.front().string().c_str(), font_size, &primary_config, primary_ranges);
         
         if (font) {
             ImFontConfig merge_config = font_config;
             merge_config.MergeMode = true;
             for (size_t i = 1; i < load_order.size(); ++i) {
-                io.Fonts->AddFontFromFileTTF(load_order[i].string().c_str(), font_size, &merge_config, ranges);
+                io.Fonts->AddFontFromFileTTF(load_order[i].string().c_str(), font_size, &merge_config, fallback_ranges);
             }
         }
     }
 
     if (!font) {
-        font = io.Fonts->AddFontFromFileTTF("resources/fonts/unifont.otf", font_size, &font_config, ranges);
+        font = io.Fonts->AddFontFromFileTTF("resources/fonts/unifont.otf", font_size, &font_config, fallback_ranges);
         if (!font) {
             io.Fonts->AddFontDefault();
         }

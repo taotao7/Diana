@@ -164,6 +164,7 @@ add_executable(diana
     src/adapters/claude_profile_store.cpp
     src/adapters/opencode_config.cpp
     src/adapters/opencode_profile_store.cpp
+    src/adapters/session_config_store.cpp
     src/ui/metrics_panel.cpp
     src/ui/claude_code_panel.cpp
     src/ui/opencode_panel.cpp

@@ -10,11 +10,34 @@ ClaudeUsageCollector::ClaudeUsageCollector() {
     if (home) {
         claude_dir_ = std::string(home) + "/.claude";
     }
+    init_future_ = std::async(std::launch::async, &ClaudeUsageCollector::do_initial_scan, this);
 }
 
 ClaudeUsageCollector::ClaudeUsageCollector(const std::string& claude_dir)
     : claude_dir_(claude_dir)
 {
+    init_future_ = std::async(std::launch::async, &ClaudeUsageCollector::do_initial_scan, this);
+}
+
+ClaudeUsageCollector::~ClaudeUsageCollector() {
+    if (init_future_.valid()) {
+        init_future_.wait();
+    }
+}
+
+void ClaudeUsageCollector::do_initial_scan() {
+    {
+        std::lock_guard<std::mutex> lock(files_mutex_);
+        scan_directories();
+        
+        for (auto& file : files_) {
+            process_file(file);
+        }
+    }
+    
+    last_scan_ = std::chrono::steady_clock::now();
+    last_poll_ = std::chrono::steady_clock::now();
+    init_done_ = true;
 }
 
 void ClaudeUsageCollector::poll() {
@@ -26,14 +49,20 @@ void ClaudeUsageCollector::poll() {
         return;
     }
     
+    if (!init_done_) {
+        return;
+    }
+    
     auto now = std::chrono::steady_clock::now();
     
     if (std::chrono::duration_cast<std::chrono::seconds>(now - last_scan_).count() >= 5) {
+        std::lock_guard<std::mutex> lock(files_mutex_);
         scan_directories();
         last_scan_ = now;
     }
     
     if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_poll_).count() >= 500) {
+        std::lock_guard<std::mutex> lock(files_mutex_);
         for (auto& file : files_) {
             process_file(file);
         }

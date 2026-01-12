@@ -3,6 +3,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <ctime>
+#include <future>
 #include <iomanip>
 #include <sstream>
 
@@ -28,11 +29,32 @@ AgentTokenStore::AgentTokenStore() {
             opencode_dir_ = std::string(home) + "/.local/share/opencode/storage";
         }
     }
+    init_future_ = std::async(std::launch::async, &AgentTokenStore::do_initial_scan, this);
 }
 
 AgentTokenStore::AgentTokenStore(const std::string& claude_dir)
     : claude_dir_(claude_dir)
 {
+    init_future_ = std::async(std::launch::async, &AgentTokenStore::do_initial_scan, this);
+}
+
+AgentTokenStore::~AgentTokenStore() {
+    if (init_future_.valid()) {
+        init_future_.wait();
+    }
+}
+
+void AgentTokenStore::do_initial_scan() {
+    std::lock_guard<std::mutex> lock(mutex_);
+    scan_all();
+    
+    for (auto& file : files_) {
+        process_file(file);
+    }
+    
+    last_scan_ = std::chrono::steady_clock::now();
+    last_poll_ = std::chrono::steady_clock::now();
+    init_done_ = true;
 }
 
 void AgentTokenStore::poll() {
@@ -40,14 +62,20 @@ void AgentTokenStore::poll() {
         return;
     }
     
+    if (!init_done_) {
+        return;
+    }
+    
     auto now = std::chrono::steady_clock::now();
     
     if (std::chrono::duration_cast<std::chrono::seconds>(now - last_scan_).count() >= 5) {
+        std::lock_guard<std::mutex> lock(mutex_);
         scan_all();
         last_scan_ = now;
     }
     
     if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_poll_).count() >= 500) {
+        std::lock_guard<std::mutex> lock(mutex_);
         for (auto& file : files_) {
             process_file(file);
         }
@@ -128,8 +156,6 @@ void AgentTokenStore::process_opencode_message_file(const std::filesystem::path&
         
         AgentTokenUsage usage;
         if (parse_opencode_message(j, usage)) {
-            std::lock_guard<std::mutex> lock(mutex_);
-            
             opencode_session_ids_.insert(session_id);
             
             auto& session = sessions_[session_id];
@@ -279,8 +305,6 @@ void AgentTokenStore::process_file(FileState& state) {
         bool is_subagent = false;
         
         if (parse_jsonl_line(line, usage, session_id, is_subagent)) {
-            std::lock_guard<std::mutex> lock(mutex_);
-            
             if (session_id.empty()) {
                 session_id = state.session_id;
             }
@@ -356,6 +380,7 @@ bool AgentTokenStore::parse_jsonl_line(const std::string& line, AgentTokenUsage&
 }
 
 AgentTypeStats AgentTokenStore::get_stats(AgentType type) const {
+    if (!init_done_) return {};
     std::lock_guard<std::mutex> lock(mutex_);
     
     AgentTypeStats stats;
@@ -412,6 +437,7 @@ std::vector<AgentTypeStats> AgentTokenStore::get_all_stats() const {
 }
 
 AgentTokenUsage AgentTokenStore::get_total_usage() const {
+    if (!init_done_) return {};
     std::lock_guard<std::mutex> lock(mutex_);
     
     AgentTokenUsage total;
@@ -426,6 +452,7 @@ AgentTokenUsage AgentTokenStore::get_total_usage() const {
 }
 
 std::vector<AgentSession> AgentTokenStore::get_sessions(AgentType type) const {
+    if (!init_done_) return {};
     std::lock_guard<std::mutex> lock(mutex_);
     
     std::vector<AgentSession> result;
@@ -461,6 +488,7 @@ std::vector<AgentSession> AgentTokenStore::get_sessions(AgentType type) const {
 }
 
 std::vector<DailyTokenData> AgentTokenStore::get_daily_data(AgentType type) const {
+    if (!init_done_) return {};
     std::lock_guard<std::mutex> lock(mutex_);
     
     std::map<std::string, DailyTokenData> daily_map;

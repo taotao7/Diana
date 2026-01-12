@@ -37,23 +37,27 @@ void render_dockspace(bool first_frame) {
         ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
 
         if (first_frame) {
-            ImGui::DockBuilderRemoveNode(dockspace_id);
-            ImGui::DockBuilderAddNode(dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
-            ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
+            ImGuiDockNode* node = ImGui::DockBuilderGetNode(dockspace_id);
+            // Only build default layout if the dockspace has no existing splits (i.e. not loaded from INI)
+            if (!node || node->IsLeafNode()) {
+                ImGui::DockBuilderRemoveNode(dockspace_id);
+                ImGui::DockBuilderAddNode(dockspace_id, dockspace_flags | ImGuiDockNodeFlags_DockSpace);
+                ImGui::DockBuilderSetNodeSize(dockspace_id, viewport->Size);
 
-            ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.25f, nullptr, &dockspace_id);
-            ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.25f, nullptr, &dockspace_id);
-            ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.3f, nullptr, &dockspace_id);
-            ImGuiID dock_id_center = dockspace_id;
-            
-            ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.5f, nullptr, &dock_id_right);
+                ImGuiID dock_id_left = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Left, 0.25f, nullptr, &dockspace_id);
+                ImGuiID dock_id_right = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Right, 0.25f, nullptr, &dockspace_id);
+                ImGuiID dock_id_bottom = ImGui::DockBuilderSplitNode(dockspace_id, ImGuiDir_Down, 0.3f, nullptr, &dockspace_id);
+                ImGuiID dock_id_center = dockspace_id;
+                
+                ImGuiID dock_id_right_bottom = ImGui::DockBuilderSplitNode(dock_id_right, ImGuiDir_Down, 0.5f, nullptr, &dock_id_right);
 
-            ImGui::DockBuilderDockWindow("Agent Config", dock_id_left);
-            ImGui::DockBuilderDockWindow("Terminal", dock_id_center);
-            ImGui::DockBuilderDockWindow("Token Metrics", dock_id_right);
-            ImGui::DockBuilderDockWindow("Agent Token Stats", dock_id_right_bottom);
+                ImGui::DockBuilderDockWindow("Agent Config", dock_id_left);
+                ImGui::DockBuilderDockWindow("Terminal", dock_id_center);
+                ImGui::DockBuilderDockWindow("Token Metrics", dock_id_right);
+                ImGui::DockBuilderDockWindow("Agent Token Stats", dock_id_right_bottom);
 
-            ImGui::DockBuilderFinish(dockspace_id);
+                ImGui::DockBuilderFinish(dockspace_id);
+            }
         }
     }
 

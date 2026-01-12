@@ -1,8 +1,10 @@
 #pragma once
 
 #include <array>
+#include <atomic>
 #include <chrono>
 #include <cstdint>
+#include <future>
 #include <mutex>
 #include <string>
 #include <unordered_map>
@@ -72,8 +74,8 @@ class AgentTokenStore {
 public:
     AgentTokenStore();
     explicit AgentTokenStore(const std::string& claude_dir);
+    ~AgentTokenStore();
     
-    // Scan and collect data
     void poll();
     void scan_all();
     
@@ -92,8 +94,15 @@ public:
     void clear();
     
     // Get file counts
-    size_t files_processed() const { return files_processed_; }
-    size_t sessions_tracked() const { return sessions_.size(); }
+    size_t files_processed() const { 
+        if (!init_done_) return 0;
+        return files_processed_; 
+    }
+    size_t sessions_tracked() const { 
+        if (!init_done_) return 0;
+        std::lock_guard<std::mutex> lock(mutex_);
+        return sessions_.size(); 
+    }
 
 private:
     struct FileState {
@@ -129,6 +138,11 @@ private:
     std::chrono::steady_clock::time_point last_scan_{};
     std::chrono::steady_clock::time_point last_poll_{};
     size_t files_processed_ = 0;
+    
+    std::future<void> init_future_;
+    std::atomic<bool> init_done_{false};
+    
+    void do_initial_scan();
 };
 
 // Helper function to get agent type name

@@ -40,6 +40,7 @@ void AppShell::render() {
 }
 
 void AppShell::shutdown() {
+    terminal_panel_->save_sessions();
 }
 
 }

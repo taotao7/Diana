@@ -2,6 +2,7 @@
 
 #include "terminal_session.h"
 #include "process/session_controller.h"
+#include "adapters/session_config_store.h"
 #include <vector>
 #include <memory>
 #include <unordered_map>
@@ -38,6 +39,9 @@ public:
     void render();
     void process_events();
     
+    void save_sessions();
+    void load_sessions();
+    
     TerminalSession* active_session();
     TerminalSession* find_session(uint32_t id);
     const std::vector<std::unique_ptr<TerminalSession>>& sessions() const { return sessions_; }
@@ -70,6 +74,8 @@ private:
     uint32_t confirm_start_session_id_ = 0;
     
     std::unordered_map<uint32_t, CursorAnimation> cursor_animations_;
+    
+    SessionConfigStore config_store_;
 };
 
 }

@@ -285,7 +285,7 @@ diana/
 └─────────┬──────────┘           │            └───────────┬─────────────────┘
           │                      │                        │
           ▼                      ▼                        ▼
-    Claude Code config      PTY/fork               Claude Code logs
+    ~/.claude/     PTY/fork               Claude Code logs
     ~/.config/opencode/     subprocess             $XDG_DATA_HOME/opencode/storage/
     ~/.config/diana/
 ```

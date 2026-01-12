@@ -2,8 +2,11 @@
 
 #include "metrics/metrics_store.h"
 #include "metrics/multi_metrics_store.h"
+#include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <future>
+#include <mutex>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -14,6 +17,7 @@ class OpencodeUsageCollector {
 public:
     OpencodeUsageCollector();
     explicit OpencodeUsageCollector(const std::string& data_dir);
+    ~OpencodeUsageCollector();
 
     void set_store(MetricsStore* store) { store_ = store; }
     void set_multi_store(MultiMetricsStore* hub) { hub_ = hub; }
@@ -55,12 +59,17 @@ private:
 
     size_t files_processed_ = 0;
     size_t entries_parsed_ = 0;
+    
+    std::future<void> init_future_;
+    std::atomic<bool> init_done_{false};
+    std::mutex mutex_;
 
     void scan_directories();
     void scan_projects();
     void scan_sessions();
     void scan_messages();
     void process_file(const std::filesystem::path& path);
+    void do_initial_scan();
 
     std::string make_project_key(const std::string& session_id) const;
     static std::string sanitize_key(const std::string& key);

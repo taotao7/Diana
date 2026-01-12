@@ -6,6 +6,9 @@
 #include <chrono>
 #include <vector>
 #include <filesystem>
+#include <future>
+#include <atomic>
+#include <mutex>
 
 namespace diana {
 
@@ -13,6 +16,7 @@ class ClaudeUsageCollector {
 public:
     ClaudeUsageCollector();
     explicit ClaudeUsageCollector(const std::string& claude_dir);
+    ~ClaudeUsageCollector();
     
     void set_metrics_store(MetricsStore* store) { store_ = store; }
     void set_multi_store(MultiMetricsStore* hub) { hub_ = hub; }
@@ -37,6 +41,8 @@ private:
     std::string extract_project_key(const std::string& file_path) const;
     std::string normalize_project_key(const std::string& key) const;
     
+    void do_initial_scan();
+    
     std::string claude_dir_;
     std::vector<FileState> files_;
     std::vector<std::filesystem::path> watched_paths_;
@@ -47,6 +53,10 @@ private:
     std::chrono::steady_clock::time_point last_poll_{};
     size_t files_processed_ = 0;
     size_t entries_parsed_ = 0;
+    
+    std::future<void> init_future_;
+    std::atomic<bool> init_done_{false};
+    std::mutex files_mutex_;
 };
 
 }
