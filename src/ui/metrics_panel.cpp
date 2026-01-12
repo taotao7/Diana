@@ -176,7 +176,7 @@ void MetricsPanel::render_stats_for_scope(AppKind app, uint32_t selected_tab_id)
     }
     
     TokenStats stats{};
-    std::array<float, 60> rate_history{};
+    std::array<float, MetricsStore::kHistoryHours> rate_history{};
     if (store) {
         stats = store->compute_stats();
         rate_history = store->get_rate_history();
@@ -201,27 +201,27 @@ void MetricsPanel::render_stats_for_scope(AppKind app, uint32_t selected_tab_id)
         ImGui::TableNextColumn(); ImGui::Text("%s", format_tokens(stats.total_output).c_str());
         ImGui::TableNextColumn(); ImGui::Text("%s", format_tokens(stats.total_tokens).c_str());
         
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn(); ImGui::Text("Tok/min");
-        ImGui::TableNextColumn(); ImGui::Text("%.1f", stats.input_per_min);
-        ImGui::TableNextColumn(); ImGui::Text("%.1f", stats.output_per_min);
-        ImGui::TableNextColumn(); ImGui::Text("%.1f", stats.tokens_per_min);
-        
-        ImGui::TableNextRow();
-        ImGui::TableNextColumn(); ImGui::Text("Tok/sec");
-        ImGui::TableNextColumn(); ImGui::Text("%.1f", stats.input_per_sec);
-        ImGui::TableNextColumn(); ImGui::Text("%.1f", stats.output_per_sec);
-        ImGui::TableNextColumn(); ImGui::Text("%.1f", stats.tokens_per_sec);
-        
         ImGui::EndTable();
     }
     
     ImGui::Spacing();
     
+    auto y_axis_formatter = [](double value, char* buff, int size, void*) -> int {
+        if (value >= 1e9) {
+            return snprintf(buff, static_cast<size_t>(size), "%.1fB", value / 1e9);
+        } else if (value >= 1e6) {
+            return snprintf(buff, static_cast<size_t>(size), "%.1fM", value / 1e6);
+        } else if (value >= 1e3) {
+            return snprintf(buff, static_cast<size_t>(size), "%.1fK", value / 1e3);
+        }
+        return snprintf(buff, static_cast<size_t>(size), "%.0f", value);
+    };
+    
     ImPlot::SetNextAxesToFit();
-    if (ImPlot::BeginPlot("Token Rate (last 60s)", ImVec2(-1, 200))) {
-        ImPlot::SetupAxes("Time (s)", "Tokens");
-        ImPlot::PlotBars("tok/s", rate_history.data(), 60);
+    if (ImPlot::BeginPlot("Token Rate (last 60h)", ImVec2(-1, 200))) {
+        ImPlot::SetupAxes("Time (h)", "Tokens");
+        ImPlot::SetupAxisFormat(ImAxis_Y1, y_axis_formatter, nullptr);
+        ImPlot::PlotBars("tok/h", rate_history.data(), static_cast<int>(MetricsStore::kHistoryHours));
         ImPlot::EndPlot();
     }
 }
@@ -239,7 +239,11 @@ std::string MetricsPanel::get_project_key(AppKind app, const std::string& workin
         result = working_dir;
     }
 
-    std::replace(result.begin(), result.end(), '/', '-');
+    for (char& c : result) {
+        if (c == '/' || c == '_') {
+            c = '-';
+        }
+    }
     if (!result.empty() && result[0] == '-') {
         result = result.substr(1);
     }

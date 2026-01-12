@@ -42,9 +42,11 @@ private:
     std::string storage_dir_;
 
     std::chrono::steady_clock::time_point last_scan_{};
+    std::chrono::steady_clock::time_point last_poll_{};
 
     std::vector<std::filesystem::path> message_paths_;
     std::unordered_map<std::string, MessageTotals> last_totals_;
+    std::unordered_map<std::string, std::filesystem::file_time_type> file_mtimes_;
     std::unordered_map<std::string, SessionInfo> session_by_id_;
     std::unordered_map<std::string, std::string> project_worktree_;
 

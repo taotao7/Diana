@@ -44,6 +44,7 @@ private:
     MultiMetricsStore* hub_ = nullptr;
     
     std::chrono::steady_clock::time_point last_scan_{};
+    std::chrono::steady_clock::time_point last_poll_{};
     size_t files_processed_ = 0;
     size_t entries_parsed_ = 0;
 };

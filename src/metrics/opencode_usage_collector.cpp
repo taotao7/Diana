@@ -51,14 +51,18 @@ void OpencodeUsageCollector::poll() {
     if (storage_dir_.empty()) return;
 
     auto now = std::chrono::steady_clock::now();
+    
     if (last_scan_.time_since_epoch().count() == 0 ||
         std::chrono::duration_cast<std::chrono::seconds>(now - last_scan_).count() >= 5) {
         scan_directories();
         last_scan_ = now;
     }
-
-    for (const auto& path : message_paths_) {
-        process_file(path);
+    
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_poll_).count() >= 500) {
+        for (const auto& path : message_paths_) {
+            process_file(path);
+        }
+        last_poll_ = now;
     }
 }
 
@@ -147,6 +151,17 @@ void OpencodeUsageCollector::process_file(const std::filesystem::path& path) {
 
     if (!fs::exists(path)) return;
 
+    std::error_code ec;
+    auto mtime = fs::last_write_time(path, ec);
+    if (ec) return;
+
+    std::string path_str = path.string();
+    auto it = file_mtimes_.find(path_str);
+    if (it != file_mtimes_.end() && it->second == mtime) {
+        return;
+    }
+    file_mtimes_[path_str] = mtime;
+
     std::ifstream file(path);
     if (!file) return;
 
@@ -175,8 +190,8 @@ void OpencodeUsageCollector::process_file(const std::filesystem::path& path) {
     if (project_key.empty()) return;
 
     auto now = std::chrono::steady_clock::now();
-    auto it = last_totals_.find(path.string());
-    MessageTotals last = it != last_totals_.end() ? it->second : MessageTotals{};
+    auto totals_it = last_totals_.find(path.string());
+    MessageTotals last = totals_it != last_totals_.end() ? totals_it->second : MessageTotals{};
 
     uint64_t current_input = totals.input_tokens + totals.cache_read + totals.cache_write;
     uint64_t current_output = totals.output_tokens + totals.reasoning;
@@ -238,7 +253,11 @@ std::string OpencodeUsageCollector::make_project_key(const std::string& session_
 
 std::string OpencodeUsageCollector::sanitize_key(const std::string& key) {
     std::string result = key;
-    std::replace(result.begin(), result.end(), '/', '-');
+    for (char& c : result) {
+        if (c == '/' || c == '_') {
+            c = '-';
+        }
+    }
     if (!result.empty() && result.front() == '-') {
         result = result.substr(1);
     }

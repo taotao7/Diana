@@ -27,7 +27,18 @@ AgentTokenPanel::AgentTokenPanel()
 
 void AgentTokenPanel::update() {
     store_->poll();
-    daily_data_ = store_->get_daily_data(selected_agent_);
+    
+    auto now = std::chrono::steady_clock::now();
+    bool agent_changed = selected_agent_ != last_selected_agent_;
+    auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_update_).count();
+    
+    if (agent_changed || elapsed >= 1) {
+        daily_data_ = store_->get_daily_data(selected_agent_);
+        cached_stats_ = store_->get_stats(selected_agent_);
+        cached_sessions_ = store_->get_sessions(selected_agent_);
+        last_update_ = now;
+        last_selected_agent_ = selected_agent_;
+    }
 }
 
 void AgentTokenPanel::render() {
@@ -98,7 +109,7 @@ void AgentTokenPanel::render_agent_selector() {
 }
 
 void AgentTokenPanel::render_summary_stats() {
-    auto stats = store_->get_stats(selected_agent_);
+    const auto& stats = cached_stats_;
     
     ImGui::Text("Total Tokens: %s", format_tokens(stats.total_tokens.total()).c_str());
     ImGui::SameLine(200);
@@ -110,7 +121,7 @@ void AgentTokenPanel::render_summary_stats() {
 }
 
 void AgentTokenPanel::render_token_breakdown() {
-    auto stats = store_->get_stats(selected_agent_);
+    const auto& stats = cached_stats_;
     
     if (ImGui::BeginTable("token_breakdown", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg)) {
         ImGui::TableSetupColumn("Type");
@@ -349,7 +360,7 @@ std::string AgentTokenPanel::truncate_session_id(const std::string& id, size_t m
 }
 
 void AgentTokenPanel::render_session_list() {
-    auto sessions = store_->get_sessions(selected_agent_);
+    const auto& sessions = cached_sessions_;
     
     if (sessions.empty()) {
         ImGui::TextDisabled("No sessions found");

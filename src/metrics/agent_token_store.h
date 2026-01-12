@@ -127,6 +127,7 @@ private:
     std::set<std::string> opencode_session_ids_;
     
     std::chrono::steady_clock::time_point last_scan_{};
+    std::chrono::steady_clock::time_point last_poll_{};
     size_t files_processed_ = 0;
 };
 

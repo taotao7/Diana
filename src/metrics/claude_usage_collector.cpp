@@ -27,15 +27,17 @@ void ClaudeUsageCollector::poll() {
     }
     
     auto now = std::chrono::steady_clock::now();
-    auto since_last_scan = now - last_scan_;
     
-    if (std::chrono::duration_cast<std::chrono::seconds>(since_last_scan).count() >= 5) {
+    if (std::chrono::duration_cast<std::chrono::seconds>(now - last_scan_).count() >= 5) {
         scan_directories();
         last_scan_ = now;
     }
     
-    for (auto& file : files_) {
-        process_file(file);
+    if (std::chrono::duration_cast<std::chrono::milliseconds>(now - last_poll_).count() >= 500) {
+        for (auto& file : files_) {
+            process_file(file);
+        }
+        last_poll_ = now;
     }
 }
 

@@ -5,6 +5,7 @@
 #include <imgui.h>
 #include <memory>
 #include <array>
+#include <chrono>
 #include <map>
 #include <vector>
 
@@ -34,6 +35,12 @@ private:
     
     std::vector<DailyTokenData> daily_data_;
     bool show_clear_confirm_ = false;
+    
+    // Cached data for rendering (avoid recomputing every frame)
+    AgentTypeStats cached_stats_;
+    std::vector<AgentSession> cached_sessions_;
+    std::chrono::steady_clock::time_point last_update_;
+    AgentType last_selected_agent_ = AgentType::ClaudeCode;
 };
 
 }
