@@ -16,8 +16,16 @@ void AgentConfigPanel::render() {
             ImGui::EndTabItem();
         }
         
-        if (ImGui::BeginTabItem("OpenCode")) {
+        if (ImGui::BeginTabItem("Codex")) {
             active_tab_ = 1;
+            if (codex_panel_) {
+                codex_panel_->render_content();
+            }
+            ImGui::EndTabItem();
+        }
+        
+        if (ImGui::BeginTabItem("OpenCode")) {
+            active_tab_ = 2;
             if (opencode_panel_) {
                 opencode_panel_->render_content();
             }

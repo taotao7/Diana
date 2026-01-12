@@ -11,6 +11,7 @@
 #include <termios.h>
 #include <thread>
 #include <chrono>
+#include <cstdio>
 
 #if defined(__APPLE__)
 #include <util.h>
@@ -51,11 +52,14 @@ bool ProcessRunner::start(const ProcessConfig& config) {
         
         if (!config.working_dir.empty()) {
             if (chdir(config.working_dir.c_str()) != 0) {
+                fprintf(stderr, "Failed to change directory to %s: %s\n", config.working_dir.c_str(), strerror(errno));
                 _exit(127);
             }
         }
         
         setenv("TERM", "xterm-256color", 1);
+        setenv("COLORTERM", "truecolor", 1);
+        setenv("LANG", "en_US.UTF-8", 1);
         
         std::vector<char*> argv;
         argv.push_back(const_cast<char*>(config.executable.c_str()));
@@ -65,6 +69,8 @@ bool ProcessRunner::start(const ProcessConfig& config) {
         argv.push_back(nullptr);
         
         execvp(config.executable.c_str(), argv.data());
+        
+        fprintf(stderr, "Failed to execute '%s': %s\n", config.executable.c_str(), strerror(errno));
         _exit(127);
     }
     
@@ -138,52 +144,73 @@ void ProcessRunner::io_thread_func() {
             break;
         }
         
-        if (ret > 0 && (fds[0].revents & POLLIN)) {
-            ssize_t n = read(pty_fd_, buffer, BUFFER_SIZE - 1);
-            if (n > 0) {
-                buffer[n] = '\0';
-                if (output_callback_) {
-                    output_callback_(std::string(buffer, n), false);
+        bool hangup = ret > 0 && (fds[0].revents & POLLHUP);
+        if (ret > 0 && (fds[0].revents & (POLLIN | POLLHUP))) {
+            while (true) {
+                ssize_t n = read(pty_fd_, buffer, BUFFER_SIZE - 1);
+                if (n > 0) {
+                    buffer[n] = '\0';
+                    if (output_callback_) {
+                        output_callback_(std::string(buffer, n), false);
+                    }
+                    continue;
                 }
-            } else if (n == 0 || (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK)) {
+                if (n == 0) {
+                    hangup = true;
+                    break;
+                }
+                if (errno == EAGAIN || errno == EWOULDBLOCK) {
+                    break;
+                }
+                hangup = true;
                 break;
             }
         }
         
-        if (fds[0].revents & POLLHUP) {
-            break;
-        }
-        
-        // Check if child exited naturally
         int status;
         pid_t result = waitpid(pid_, &status, WNOHANG);
         if (result == pid_) {
             exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
             pid_ = -1;
+            
+            for (int drain_attempts = 0; drain_attempts < 50; ++drain_attempts) {
+                ssize_t n = read(pty_fd_, buffer, BUFFER_SIZE - 1);
+                if (n > 0) {
+                    buffer[n] = '\0';
+                    if (output_callback_) {
+                        output_callback_(std::string(buffer, n), false);
+                    }
+                } else if (n == 0) {
+                    break;
+                } else {
+                    if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                        break;
+                    }
+                }
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            break;
+        }
+        
+        if (hangup) {
             break;
         }
     }
     
-    // If stop was requested and process is still running, terminate it
     if (pid_ > 0 && stop_requested_.load()) {
-        // Close PTY first - this sends SIGHUP to the process group
         close_pty();
         
-        // Give a moment for SIGHUP to take effect
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         
-        // Check if it exited from SIGHUP
         int status;
         pid_t r = waitpid(pid_, &status, WNOHANG);
         if (r == pid_) {
             exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
             pid_ = -1;
         } else {
-            // Still running, send SIGKILL
             ::kill(pid_, SIGKILL);
             ::kill(-pid_, SIGKILL);
             
-            // Brief wait for SIGKILL
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             r = waitpid(pid_, &status, WNOHANG);
             if (r == pid_) {
@@ -193,7 +220,6 @@ void ProcessRunner::io_thread_func() {
         }
     }
     
-    // Report exit
     if (exit_callback_ && !exit_reported) {
         exit_reported = true;
         exit_callback_(exit_code);

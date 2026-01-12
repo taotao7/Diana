@@ -74,6 +74,7 @@ private:
     uint32_t confirm_start_session_id_ = 0;
     
     std::unordered_map<uint32_t, CursorAnimation> cursor_animations_;
+    std::unordered_map<uint32_t, std::string> cpr_buffers_;
     
     SessionConfigStore config_store_;
 };

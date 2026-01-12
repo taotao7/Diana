@@ -74,6 +74,39 @@ ImVec4 u32_to_imvec4(uint32_t color) {
     );
 }
 
+std::string filter_cpr_and_build_reply(const std::string& input, std::string& pending, const CursorInfo& cursor, bool& has_reply) {
+    std::string data = pending + input;
+    pending.clear();
+
+    std::string filtered;
+    filtered.reserve(data.size());
+
+    size_t i = 0;
+    while (i < data.size()) {
+        if (data[i] == '\x1b') {
+            if (i + 3 >= data.size()) {
+                pending = data.substr(i);
+                break;
+            }
+            if (data[i + 1] == '[' && data[i + 2] == '6' && data[i + 3] == 'n') {
+                has_reply = true;
+                i += 4;
+                continue;
+            }
+        }
+        filtered.push_back(data[i]);
+        i += 1;
+    }
+
+    return filtered;
+}
+
+std::string build_cpr_reply(const CursorInfo& cursor) {
+    int row = cursor.row + 1;
+    int col = cursor.col + 1;
+    return "\x1b[" + std::to_string(row) + ";" + std::to_string(col) + "R";
+}
+
 }
 
 TerminalPanel::TerminalPanel() {
@@ -242,15 +275,39 @@ void TerminalPanel::process_events() {
             
             if constexpr (std::is_same_v<T, OutputEvent>) {
                 if (auto* session = find_session(evt.session_id)) {
-                    session->write_to_terminal(evt.data.data(), evt.data.size());
-                    if (!session->user_scrolled_up()) {
-                        session->request_scroll_to_bottom();
+                    auto& pending = cpr_buffers_[evt.session_id];
+                    bool has_reply = false;
+                    std::string filtered = filter_cpr_and_build_reply(
+                        evt.data,
+                        pending,
+                        session->terminal().get_cursor(),
+                        has_reply
+                    );
+
+                    if (!filtered.empty()) {
+                        session->write_to_terminal(filtered.data(), filtered.size());
+                        if (!session->user_scrolled_up()) {
+                            session->request_scroll_to_bottom();
+                        }
+                    }
+
+                    if (has_reply) {
+                        controller_.send_raw_key(*session, build_cpr_reply(session->terminal().get_cursor()));
                     }
                 }
             }
             else if constexpr (std::is_same_v<T, ExitEvent>) {
                 if (auto* session = find_session(evt.session_id)) {
-                    std::string msg = "\r\n[Process exited with code " + std::to_string(evt.exit_code) + "]\r\n";
+                    std::string msg;
+                    if (evt.exit_code == 0) {
+                        msg = "\r\n[Process exited with code 0]\r\n";
+                    } else {
+                        msg = "\r\n[Process exited with error code " + std::to_string(evt.exit_code) + "]\r\n";
+                        
+                        if (session->config().app == AppKind::Codex && evt.exit_code == 1) {
+                            msg += "[Note: Codex may have failed to start. Check if you're logged in with 'codex login']\r\n";
+                        }
+                    }
                     session->write_to_terminal(msg.data(), msg.size());
                     session->request_scroll_to_bottom();
                     
@@ -293,6 +350,7 @@ void TerminalPanel::close_session(uint32_t id) {
         [id](const auto& s) { return s->id() == id; });
     
     if (it != sessions_.end()) {
+        cpr_buffers_.erase(id);
         sessions_.erase(it);
         
         if (active_session_idx_ >= sessions_.size() && !sessions_.empty()) {

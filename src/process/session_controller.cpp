@@ -55,6 +55,10 @@ void SessionController::start_session(TerminalSession& session) {
     
     ProcessConfig config = build_config(session);
     
+    std::string start_msg = "\r\n[Starting " + std::string(TerminalSession::app_kind_name(session.config().app)) + "]\r\n";
+    session.write_to_terminal(start_msg.data(), start_msg.size());
+    session.request_scroll_to_bottom();
+    
     if (runner->start(config)) {
         session.set_state(SessionState::Running);
         runners_[session_id] = std::move(runner);
