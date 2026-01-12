@@ -58,7 +58,7 @@ void AgentTokenStore::do_initial_scan() {
 }
 
 void AgentTokenStore::poll() {
-    if (claude_dir_.empty()) {
+    if (claude_dir_.empty() && codex_dir_.empty() && opencode_dir_.empty()) {
         return;
     }
     
@@ -85,6 +85,7 @@ void AgentTokenStore::poll() {
 
 void AgentTokenStore::scan_all() {
     scan_claude_directory();
+    scan_codex_directory();
     scan_opencode_directory();
 }
 
@@ -104,6 +105,21 @@ void AgentTokenStore::scan_claude_directory() {
     if (fs::exists(transcripts_dir)) {
         scan_directory_recursive(transcripts_dir, AgentType::ClaudeCode);
     }
+}
+
+void AgentTokenStore::scan_codex_directory() {
+    namespace fs = std::filesystem;
+    
+    if (codex_dir_.empty() || !fs::exists(codex_dir_)) {
+        return;
+    }
+    
+    fs::path sessions_dir = fs::path(codex_dir_) / "sessions";
+    if (!fs::exists(sessions_dir)) {
+        return;
+    }
+    
+    scan_directory_recursive(sessions_dir, AgentType::Codex);
 }
 
 void AgentTokenStore::scan_opencode_directory() {
@@ -304,7 +320,11 @@ void AgentTokenStore::process_file(FileState& state) {
         std::string session_id;
         bool is_subagent = false;
         
-        if (parse_jsonl_line(line, usage, session_id, is_subagent)) {
+        bool has_usage = parse_jsonl_line(line, usage, session_id, is_subagent);
+        if (!session_id.empty() && state.session_id != session_id) {
+            state.session_id = session_id;
+        }
+        if (has_usage) {
             if (session_id.empty()) {
                 session_id = state.session_id;
             }
@@ -333,6 +353,46 @@ bool AgentTokenStore::parse_jsonl_line(const std::string& line, AgentTokenUsage&
                                         std::string& session_id, bool& is_subagent) {
     try {
         auto json = nlohmann::json::parse(line);
+        
+        if (json.contains("type") && json["type"].is_string()) {
+            std::string type = json["type"].get<std::string>();
+            if (type == "session_meta" && json.contains("payload")) {
+                const auto& payload = json["payload"];
+                if (payload.contains("id")) {
+                    session_id = payload["id"].get<std::string>();
+                }
+                return false;
+            }
+            if (type == "event_msg" && json.contains("payload")) {
+                const auto& payload = json["payload"];
+                if (payload.contains("type") && payload["type"].is_string()) {
+                    std::string payload_type = payload["type"].get<std::string>();
+                    if (payload_type == "token_count") {
+                        if (!payload.contains("info") || payload["info"].is_null()) {
+                            return false;
+                        }
+                        const auto& info = payload["info"];
+                        if (!info.contains("last_token_usage")) {
+                            return false;
+                        }
+                        const auto& last = info["last_token_usage"];
+                        if (last.contains("input_tokens")) {
+                            usage.input_tokens = last["input_tokens"].get<uint64_t>();
+                        }
+                        if (last.contains("output_tokens")) {
+                            usage.output_tokens = last["output_tokens"].get<uint64_t>();
+                        }
+                        if (last.contains("reasoning_output_tokens")) {
+                            usage.output_tokens += last["reasoning_output_tokens"].get<uint64_t>();
+                        }
+                        if (last.contains("cached_input_tokens")) {
+                            usage.cache_read_tokens = last["cached_input_tokens"].get<uint64_t>();
+                        }
+                        return usage.total() > 0;
+                    }
+                }
+            }
+        }
         
         if (json.contains("sessionId")) {
             session_id = json["sessionId"].get<std::string>();

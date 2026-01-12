@@ -115,6 +115,7 @@ private:
     };
     
     void scan_claude_directory();
+    void scan_codex_directory();
     void scan_opencode_directory();
     void scan_directory_recursive(const std::filesystem::path& dir, AgentType type);
     void process_file(FileState& state);
