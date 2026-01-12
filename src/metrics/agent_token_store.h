@@ -121,7 +121,9 @@ private:
     void process_file(FileState& state);
     void process_opencode_message_file(const std::filesystem::path& path, const std::string& session_id);
     bool parse_jsonl_line(const std::string& line, AgentTokenUsage& usage, 
-                          std::string& session_id, bool& is_subagent);
+                          std::string& session_id, bool& is_subagent,
+                          std::chrono::system_clock::time_point& usage_time,
+                          bool& has_usage_time);
     bool parse_opencode_message(const nlohmann::json& j, AgentTokenUsage& usage);
     
     AgentType detect_agent_type(const std::filesystem::path& path);
@@ -135,6 +137,8 @@ private:
     std::vector<FileState> files_;
     std::unordered_map<std::string, AgentSession> sessions_;
     std::set<std::string> opencode_session_ids_;
+    std::array<std::map<std::string, DailyTokenData>, 3> daily_totals_;
+    std::array<std::unordered_map<std::string, std::set<std::string>>, 3> daily_session_ids_;
     
     std::chrono::steady_clock::time_point last_scan_{};
     std::chrono::steady_clock::time_point last_poll_{};

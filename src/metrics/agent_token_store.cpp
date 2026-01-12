@@ -6,8 +6,95 @@
 #include <future>
 #include <iomanip>
 #include <sstream>
+#include <array>
+#include <ctime>
+#include <cctype>
 
 namespace diana {
+
+namespace {
+
+int agent_index(AgentType type) {
+    switch (type) {
+        case AgentType::ClaudeCode: return 0;
+        case AgentType::Codex: return 1;
+        case AgentType::OpenCode: return 2;
+        default: return -1;
+    }
+}
+
+bool parse_iso8601_utc(const std::string& ts, std::chrono::system_clock::time_point& out) {
+    if (ts.size() < 19) {
+        return false;
+    }
+    std::tm tm{};
+    std::istringstream ss(ts.substr(0, 19));
+    ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
+    if (ss.fail()) {
+        return false;
+    }
+#if defined(__APPLE__) || defined(__linux__)
+    std::time_t t = timegm(&tm);
+#else
+    std::time_t t = std::mktime(&tm);
+#endif
+    if (t == static_cast<std::time_t>(-1)) {
+        return false;
+    }
+    out = std::chrono::system_clock::from_time_t(t);
+    auto dot = ts.find('.');
+    if (dot != std::string::npos) {
+        size_t end = dot + 1;
+        while (end < ts.size() && std::isdigit(static_cast<unsigned char>(ts[end]))) {
+            end++;
+        }
+        std::string frac = ts.substr(dot + 1, end - dot - 1);
+        if (!frac.empty()) {
+            while (frac.size() < 3) {
+                frac.push_back('0');
+            }
+            int ms = std::stoi(frac.substr(0, 3));
+            out += std::chrono::milliseconds(ms);
+        }
+    }
+    return true;
+}
+
+void add_daily_usage(std::array<std::map<std::string, DailyTokenData>, 3>& totals,
+                     std::array<std::unordered_map<std::string, std::set<std::string>>, 3>& session_ids,
+                     AgentType type,
+                     const std::string& session_id,
+                     const AgentTokenUsage& usage,
+                     const std::chrono::system_clock::time_point& usage_time) {
+    int idx = agent_index(type);
+    if (idx < 0) {
+        return;
+    }
+    std::time_t tt = std::chrono::system_clock::to_time_t(usage_time);
+    std::tm* tm = std::localtime(&tt);
+    if (!tm) {
+        return;
+    }
+    DailyTokenData data;
+    data.year = tm->tm_year + 1900;
+    data.month = tm->tm_mon + 1;
+    data.day = tm->tm_mday;
+    data.weekday = tm->tm_wday;
+    std::string key = data.date_key();
+
+    auto& day = totals[idx][key];
+    if (day.year == 0) {
+        day = data;
+    }
+    day.tokens += usage.total();
+    day.cost += usage.cost_usd;
+    auto& sessions_for_day = session_ids[idx][key];
+    if (sessions_for_day.insert(session_id).second) {
+        day.session_count++;
+    }
+}
+
+}
 
 std::string DailyTokenData::date_key() const {
     std::ostringstream oss;
@@ -174,10 +261,23 @@ void AgentTokenStore::process_opencode_message_file(const std::filesystem::path&
         if (parse_opencode_message(j, usage)) {
             opencode_session_ids_.insert(session_id);
             
+            std::chrono::system_clock::time_point usage_time = std::chrono::system_clock::now();
+            bool has_usage_time = false;
+            if (j.contains("time") && j["time"].is_object() && j["time"].contains("created")) {
+                const auto& created = j["time"]["created"];
+                if (created.is_number()) {
+                    auto ms = created.get<int64_t>();
+                    usage_time = std::chrono::system_clock::time_point{
+                        std::chrono::milliseconds(ms)
+                    };
+                    has_usage_time = true;
+                }
+            }
+            
             auto& session = sessions_[session_id];
             if (session.session_id.empty()) {
                 session.session_id = session_id;
-                session.first_seen = std::chrono::system_clock::now();
+                session.first_seen = has_usage_time ? usage_time : std::chrono::system_clock::now();
                 session.is_subagent = false;
             }
             
@@ -186,8 +286,12 @@ void AgentTokenStore::process_opencode_message_file(const std::filesystem::path&
             session.tokens.cache_creation_tokens += usage.cache_creation_tokens;
             session.tokens.cache_read_tokens += usage.cache_read_tokens;
             session.tokens.cost_usd += usage.cost_usd;
-            session.last_seen = std::chrono::system_clock::now();
+            session.last_seen = has_usage_time ? usage_time : std::chrono::system_clock::now();
             session.message_count++;
+            
+            if (has_usage_time) {
+                add_daily_usage(daily_totals_, daily_session_ids_, AgentType::OpenCode, session_id, usage, usage_time);
+            }
             
             ++files_processed_;
         }
@@ -319,8 +423,10 @@ void AgentTokenStore::process_file(FileState& state) {
         AgentTokenUsage usage;
         std::string session_id;
         bool is_subagent = false;
+        std::chrono::system_clock::time_point usage_time{};
+        bool has_usage_time = false;
         
-        bool has_usage = parse_jsonl_line(line, usage, session_id, is_subagent);
+        bool has_usage = parse_jsonl_line(line, usage, session_id, is_subagent, usage_time, has_usage_time);
         if (!session_id.empty() && state.session_id != session_id) {
             state.session_id = session_id;
         }
@@ -332,7 +438,7 @@ void AgentTokenStore::process_file(FileState& state) {
             auto& session = sessions_[session_id];
             if (session.session_id.empty()) {
                 session.session_id = session_id;
-                session.first_seen = std::chrono::system_clock::now();
+                session.first_seen = has_usage_time ? usage_time : std::chrono::system_clock::now();
                 session.is_subagent = state.is_subagent || is_subagent;
             }
             
@@ -341,8 +447,12 @@ void AgentTokenStore::process_file(FileState& state) {
             session.tokens.cache_creation_tokens += usage.cache_creation_tokens;
             session.tokens.cache_read_tokens += usage.cache_read_tokens;
             session.tokens.cost_usd += usage.cost_usd;
-            session.last_seen = std::chrono::system_clock::now();
+            session.last_seen = has_usage_time ? usage_time : std::chrono::system_clock::now();
             session.message_count++;
+
+            if (has_usage_time) {
+                add_daily_usage(daily_totals_, daily_session_ids_, state.agent_type, session_id, usage, usage_time);
+            }
         }
     }
     
@@ -350,9 +460,15 @@ void AgentTokenStore::process_file(FileState& state) {
 }
 
 bool AgentTokenStore::parse_jsonl_line(const std::string& line, AgentTokenUsage& usage,
-                                        std::string& session_id, bool& is_subagent) {
+                                        std::string& session_id, bool& is_subagent,
+                                        std::chrono::system_clock::time_point& usage_time,
+                                        bool& has_usage_time) {
     try {
         auto json = nlohmann::json::parse(line);
+        
+        if (json.contains("timestamp") && json["timestamp"].is_string()) {
+            has_usage_time = parse_iso8601_utc(json["timestamp"].get<std::string>(), usage_time);
+        }
         
         if (json.contains("type") && json["type"].is_string()) {
             std::string type = json["type"].get<std::string>();
@@ -554,7 +670,6 @@ std::vector<DailyTokenData> AgentTokenStore::get_daily_data(AgentType type) cons
     std::map<std::string, DailyTokenData> daily_map;
     
     auto now = std::chrono::system_clock::now();
-    auto year_ago = now - std::chrono::hours(24 * 365);
     
     for (int i = 0; i < 365; ++i) {
         auto day_point = now - std::chrono::hours(24 * (364 - i));
@@ -570,37 +685,13 @@ std::vector<DailyTokenData> AgentTokenStore::get_daily_data(AgentType type) cons
         daily_map[data.date_key()] = data;
     }
     
-    for (const auto& [id, session] : sessions_) {
-        bool match = false;
-        
-        if (type == AgentType::OpenCode) {
-            match = opencode_session_ids_.count(id) > 0;
-        } else {
-            for (const auto& file : files_) {
-                if (file.session_id == id && file.agent_type == type) {
-                    match = true;
-                    break;
-                }
-            }
-            
-            if (!match && type == AgentType::ClaudeCode && opencode_session_ids_.count(id) == 0) {
-                match = true;
-            }
-        }
-        
-        if (match && session.first_seen > year_ago) {
-            auto time_t_val = std::chrono::system_clock::to_time_t(session.first_seen);
-            std::tm* tm = std::localtime(&time_t_val);
-            
-            std::ostringstream oss;
-            oss << (tm->tm_year + 1900) << "-" << std::setfill('0') << std::setw(2) << (tm->tm_mon + 1)
-                << "-" << std::setw(2) << tm->tm_mday;
-            std::string key = oss.str();
-            
+    int idx = agent_index(type);
+    if (idx >= 0) {
+        for (const auto& [key, data] : daily_totals_[idx]) {
             if (daily_map.count(key)) {
-                daily_map[key].tokens += session.tokens.total();
-                daily_map[key].cost += session.tokens.cost_usd;
-                daily_map[key].session_count++;
+                daily_map[key].tokens += data.tokens;
+                daily_map[key].cost += data.cost;
+                daily_map[key].session_count += data.session_count;
             }
         }
     }
@@ -619,6 +710,13 @@ void AgentTokenStore::clear() {
     sessions_.clear();
     files_.clear();
     files_processed_ = 0;
+    opencode_session_ids_.clear();
+    for (auto& daily : daily_totals_) {
+        daily.clear();
+    }
+    for (auto& session_ids : daily_session_ids_) {
+        session_ids.clear();
+    }
 }
 
 }
