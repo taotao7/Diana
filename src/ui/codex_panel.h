@@ -1,0 +1,60 @@
+#pragma once
+
+#include "adapters/codex_profile_store.h"
+#include <imgui.h>
+#include <array>
+#include <map>
+
+namespace diana {
+
+class CodexPanel {
+public:
+    CodexPanel();
+    
+    void render();
+    void render_content();
+    
+    void set_profile_store(CodexProfileStore* store) { profile_store_ = store; }
+    
+    const std::string& selected_profile_for_launch() const { return editing_profile_name_; }
+
+private:
+    void render_profile_list();
+    void render_config_editor();
+    void render_basic_settings();
+    void render_model_providers_section();
+    void render_features_section();
+    void render_mcp_section();
+    void render_tools_section();
+    void render_tui_section();
+    void render_sandbox_section();
+    void render_advanced_section();
+    
+    void select_profile(const std::string& name);
+    void create_new_profile();
+    void save_current_profile();
+    void delete_current_profile();
+    void import_from_config();
+    
+    void render_string_list(const char* label, std::vector<std::string>& list);
+    
+    CodexProfileStore* profile_store_ = nullptr;
+    
+    std::string editing_profile_name_;
+    std::string editing_profile_new_name_;
+    CodexConfig editing_config_;
+    std::string editing_description_;
+    bool config_modified_ = false;
+    
+    std::string new_profile_name_;
+    std::string new_provider_id_;
+    std::string new_mcp_id_;
+    
+    std::string status_message_;
+    float status_time_ = 0.0f;
+    
+    bool show_new_profile_popup_ = false;
+    bool show_delete_confirm_ = false;
+};
+
+}
