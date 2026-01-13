@@ -51,7 +51,7 @@ TEST_F(AgentTokenStoreTest, ParseSimpleUsage) {
     );
     
     diana::AgentTokenStore store(test_dir_.string());
-    store.scan_all();
+    store.wait_for_init();
     store.poll();
     
     EXPECT_GE(store.files_processed(), 1);
@@ -71,7 +71,7 @@ TEST_F(AgentTokenStoreTest, ParseCacheTokens) {
     );
     
     diana::AgentTokenStore store(test_dir_.string());
-    store.scan_all();
+    store.wait_for_init();
     store.poll();
     
     auto stats = store.get_stats(diana::AgentType::ClaudeCode);
@@ -93,7 +93,7 @@ TEST_F(AgentTokenStoreTest, SessionTracking) {
     );
     
     diana::AgentTokenStore store(test_dir_.string());
-    store.scan_all();
+    store.wait_for_init();
     store.poll();
     
     auto sessions = store.get_sessions(diana::AgentType::ClaudeCode);
@@ -122,7 +122,7 @@ TEST_F(AgentTokenStoreTest, SubagentDetection) {
     );
     
     diana::AgentTokenStore store(test_dir_.string());
-    store.scan_all();
+    store.wait_for_init();
     store.poll();
     
     auto sessions = store.get_sessions(diana::AgentType::ClaudeCode);
@@ -149,7 +149,7 @@ TEST_F(AgentTokenStoreTest, GetTotalUsage) {
     );
     
     diana::AgentTokenStore store(test_dir_.string());
-    store.scan_all();
+    store.wait_for_init();
     store.poll();
     
     auto total = store.get_total_usage();
@@ -164,7 +164,7 @@ TEST_F(AgentTokenStoreTest, Clear) {
     );
     
     diana::AgentTokenStore store(test_dir_.string());
-    store.scan_all();
+    store.wait_for_init();
     store.poll();
     
     EXPECT_GE(store.sessions_tracked(), 1);
@@ -178,6 +178,7 @@ TEST_F(AgentTokenStoreTest, Clear) {
 
 TEST_F(AgentTokenStoreTest, DailyDataGeneration) {
     diana::AgentTokenStore store(test_dir_.string());
+    store.wait_for_init();
     
     auto daily = store.get_daily_data(diana::AgentType::ClaudeCode);
     EXPECT_EQ(daily.size(), 365);
@@ -202,7 +203,7 @@ TEST_F(AgentTokenStoreTest, MultipleEntriesInFile) {
     });
     
     diana::AgentTokenStore store(test_dir_.string());
-    store.scan_all();
+    store.wait_for_init();
     store.poll();
     
     auto stats = store.get_stats(diana::AgentType::ClaudeCode);
@@ -222,7 +223,7 @@ TEST_F(AgentTokenStoreTest, InvalidJsonIgnored) {
     );
     
     diana::AgentTokenStore store(test_dir_.string());
-    store.scan_all();
+    store.wait_for_init();
     store.poll();
     
     auto stats = store.get_stats(diana::AgentType::ClaudeCode);

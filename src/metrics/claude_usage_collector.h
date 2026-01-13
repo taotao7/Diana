@@ -27,6 +27,12 @@ public:
     size_t entries_parsed() const { return entries_parsed_; }
     
     const std::vector<std::filesystem::path>& watched_files() const { return watched_paths_; }
+    
+    void wait_for_init() {
+        if (init_future_.valid()) {
+            init_future_.wait();
+        }
+    }
 
 private:
     struct FileState {

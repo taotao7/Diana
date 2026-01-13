@@ -93,6 +93,13 @@ public:
     // Clear all data
     void clear();
     
+    // Wait for initial scan to complete
+    void wait_for_init() {
+        if (init_future_.valid()) {
+            init_future_.wait();
+        }
+    }
+    
     // Get file counts
     size_t files_processed() const { 
         if (!init_done_) return 0;

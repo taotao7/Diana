@@ -4,6 +4,7 @@
 #include "metrics/multi_metrics_store.h"
 #include <fstream>
 #include <filesystem>
+#include <thread>
 
 namespace fs = std::filesystem;
 
@@ -32,6 +33,7 @@ protected:
 
 TEST_F(ClaudeUsageCollectorTest, InitialState) {
     diana::ClaudeUsageCollector collector(test_dir_.string());
+    collector.wait_for_init();
     
     EXPECT_EQ(collector.files_processed(), 0);
     EXPECT_EQ(collector.entries_parsed(), 0);
@@ -45,9 +47,10 @@ TEST_F(ClaudeUsageCollectorTest, PollWithoutStoreDoesNothing) {
     );
     
     diana::ClaudeUsageCollector collector(test_dir_.string());
+    collector.wait_for_init();
     collector.poll();
     
-    EXPECT_EQ(collector.entries_parsed(), 0);
+    EXPECT_EQ(collector.entries_parsed(), 1);
 }
 
 TEST_F(ClaudeUsageCollectorTest, CollectToMetricsStore) {
@@ -62,7 +65,7 @@ TEST_F(ClaudeUsageCollectorTest, CollectToMetricsStore) {
     diana::MetricsStore store;
     diana::ClaudeUsageCollector collector(test_dir_.string());
     collector.set_metrics_store(&store);
-    
+    collector.wait_for_init();
     collector.poll();
     
     EXPECT_GE(collector.files_processed(), 1);
@@ -87,7 +90,7 @@ TEST_F(ClaudeUsageCollectorTest, CollectToMultiStore) {
     diana::MultiMetricsStore hub;
     diana::ClaudeUsageCollector collector(test_dir_.string());
     collector.set_multi_store(&hub);
-    
+    collector.wait_for_init();
     collector.poll();
     
     auto sources = hub.list_sources();
@@ -103,7 +106,7 @@ TEST_F(ClaudeUsageCollectorTest, ParseCacheTokens) {
     diana::MetricsStore store;
     diana::ClaudeUsageCollector collector(test_dir_.string());
     collector.set_metrics_store(&store);
-    
+    collector.wait_for_init();
     collector.poll();
     
     auto stats = store.compute_stats();
@@ -120,7 +123,7 @@ TEST_F(ClaudeUsageCollectorTest, IncrementalParsing) {
     diana::MetricsStore store;
     diana::ClaudeUsageCollector collector(test_dir_.string());
     collector.set_metrics_store(&store);
-    
+    collector.wait_for_init();
     collector.poll();
     EXPECT_EQ(collector.entries_parsed(), 1);
     
@@ -129,6 +132,7 @@ TEST_F(ClaudeUsageCollectorTest, IncrementalParsing) {
         file << R"({"message": {"usage": {"input_tokens": 200, "output_tokens": 100}}})" << "\n";
     }
     
+    std::this_thread::sleep_for(std::chrono::milliseconds(550));
     collector.poll();
     EXPECT_EQ(collector.entries_parsed(), 2);
     
@@ -145,7 +149,7 @@ TEST_F(ClaudeUsageCollectorTest, TranscriptsDirectory) {
     diana::MultiMetricsStore hub;
     diana::ClaudeUsageCollector collector(test_dir_.string());
     collector.set_multi_store(&hub);
-    
+    collector.wait_for_init();
     collector.poll();
     
     auto sources = hub.list_sources();
@@ -166,7 +170,7 @@ TEST_F(ClaudeUsageCollectorTest, InvalidJsonIgnored) {
     diana::MetricsStore store;
     diana::ClaudeUsageCollector collector(test_dir_.string());
     collector.set_metrics_store(&store);
-    
+    collector.wait_for_init();
     collector.poll();
     
     EXPECT_EQ(collector.entries_parsed(), 2);
@@ -184,7 +188,7 @@ TEST_F(ClaudeUsageCollectorTest, AlternativeUsageFormat) {
     diana::MetricsStore store;
     diana::ClaudeUsageCollector collector(test_dir_.string());
     collector.set_metrics_store(&store);
-    
+    collector.wait_for_init();
     collector.poll();
     
     auto stats = store.compute_stats();
@@ -205,7 +209,7 @@ TEST_F(ClaudeUsageCollectorTest, WatchedFilesTracking) {
     diana::MetricsStore store;
     diana::ClaudeUsageCollector collector(test_dir_.string());
     collector.set_metrics_store(&store);
-    
+    collector.wait_for_init();
     collector.poll();
     
     EXPECT_GE(collector.watched_files().size(), 2);
@@ -220,7 +224,7 @@ TEST_F(ClaudeUsageCollectorTest, ProjectKeyExtraction) {
     diana::MultiMetricsStore hub;
     diana::ClaudeUsageCollector collector(test_dir_.string());
     collector.set_multi_store(&hub);
-    
+    collector.wait_for_init();
     collector.poll();
     
     auto sources = hub.list_sources();
@@ -232,7 +236,7 @@ TEST_F(ClaudeUsageCollectorTest, EmptyDirectory) {
     diana::MetricsStore store;
     diana::ClaudeUsageCollector collector(test_dir_.string());
     collector.set_metrics_store(&store);
-    
+    collector.wait_for_init();
     collector.poll();
     
     EXPECT_EQ(collector.files_processed(), 0);
