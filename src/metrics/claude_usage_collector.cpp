@@ -1,9 +1,65 @@
 #include "metrics/claude_usage_collector.h"
 #include <nlohmann/json.hpp>
-#include <fstream>
 #include <cstdlib>
+#include <cctype>
+#include <ctime>
+#include <fstream>
+#include <iomanip>
+#include <sstream>
+
+namespace {
+
+bool parse_iso8601_utc(const std::string& ts, std::chrono::system_clock::time_point& out) {
+    if (ts.size() < 19) {
+        return false;
+    }
+    std::tm tm{};
+    std::istringstream ss(ts.substr(0, 19));
+    ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
+    if (ss.fail()) {
+        return false;
+    }
+#if defined(__APPLE__) || defined(__linux__)
+    std::time_t t = timegm(&tm);
+#else
+    std::time_t t = std::mktime(&tm);
+#endif
+    if (t == static_cast<std::time_t>(-1)) {
+        return false;
+    }
+    out = std::chrono::system_clock::from_time_t(t);
+    auto dot = ts.find('.');
+    if (dot != std::string::npos) {
+        size_t end = dot + 1;
+        while (end < ts.size() && std::isdigit(static_cast<unsigned char>(ts[end]))) {
+            end++;
+        }
+        std::string frac = ts.substr(dot + 1, end - dot - 1);
+        if (!frac.empty()) {
+            while (frac.size() < 3) {
+                frac.push_back('0');
+            }
+            int ms = std::stoi(frac.substr(0, 3));
+            out += std::chrono::milliseconds(ms);
+        }
+    }
+    return true;
+}
+
+bool extract_usage_timestamp(const nlohmann::json& json, std::chrono::system_clock::time_point& out) {
+    if (json.contains("timestamp") && json["timestamp"].is_string()) {
+        return parse_iso8601_utc(json["timestamp"].get<std::string>(), out);
+    }
+    if (json.contains("created_at") && json["created_at"].is_string()) {
+        return parse_iso8601_utc(json["created_at"].get<std::string>(), out);
+    }
+    return false;
+}
+
+}
 
 namespace diana {
+
 
 ClaudeUsageCollector::ClaudeUsageCollector() {
     const char* home = std::getenv("HOME");
@@ -228,7 +284,12 @@ bool ClaudeUsageCollector::parse_jsonl_line(const std::string& line, TokenSample
                 sample.cost_usd = json["costUSD"].get<double>();
             }
             
-            sample.timestamp = std::chrono::steady_clock::now();
+            std::chrono::system_clock::time_point usage_time = std::chrono::system_clock::now();
+            if (extract_usage_timestamp(json, usage_time)) {
+                sample.timestamp = usage_time;
+            } else {
+                sample.timestamp = std::chrono::system_clock::now();
+            }
             return sample.total_tokens > 0;
         }
         

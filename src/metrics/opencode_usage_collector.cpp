@@ -1,10 +1,14 @@
 #include "opencode_usage_collector.h"
 
 #include <algorithm>
+#include <cctype>
+#include <cstdlib>
+#include <ctime>
 #include <fstream>
 #include <future>
+#include <iomanip>
 #include <nlohmann/json.hpp>
-#include <cstdlib>
+#include <sstream>
 
 namespace diana {
 namespace {
@@ -22,6 +26,105 @@ std::string get_xdg_data_home() {
         return home + "/.local/share";
     }
     return {};
+}
+
+bool parse_iso8601_utc(const std::string& ts, std::chrono::system_clock::time_point& out) {
+    if (ts.size() < 19) {
+        return false;
+    }
+    std::tm tm{};
+    std::istringstream ss(ts.substr(0, 19));
+    ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S");
+    if (ss.fail()) {
+        return false;
+    }
+#if defined(__APPLE__) || defined(__linux__)
+    std::time_t t = timegm(&tm);
+#else
+    std::time_t t = std::mktime(&tm);
+#endif
+    if (t == static_cast<std::time_t>(-1)) {
+        return false;
+    }
+    out = std::chrono::system_clock::from_time_t(t);
+    auto dot = ts.find('.');
+    if (dot != std::string::npos) {
+        size_t end = dot + 1;
+        while (end < ts.size() && std::isdigit(static_cast<unsigned char>(ts[end]))) {
+            end++;
+        }
+        std::string frac = ts.substr(dot + 1, end - dot - 1);
+        if (!frac.empty()) {
+            while (frac.size() < 3) {
+                frac.push_back('0');
+            }
+            int ms = std::stoi(frac.substr(0, 3));
+            out += std::chrono::milliseconds(ms);
+        }
+    }
+    return true;
+}
+
+bool parse_epoch_timestamp(double value, std::chrono::system_clock::time_point& out) {
+    if (value <= 0.0) {
+        return false;
+    }
+    double ms_value = value;
+    if (value > 1e12) {
+        ms_value = value;
+    } else if (value > 1e9) {
+        ms_value = value * 1000.0;
+    } else if (value > 1e6) {
+        ms_value = value * 1000.0;
+    } else {
+        return false;
+    }
+
+    auto ms = static_cast<int64_t>(ms_value);
+    out = std::chrono::system_clock::time_point{std::chrono::milliseconds(ms)};
+    return true;
+}
+
+bool parse_timestamp_value(const nlohmann::json& value, std::chrono::system_clock::time_point& out) {
+    if (value.is_number()) {
+        return parse_epoch_timestamp(value.get<double>(), out);
+    }
+    if (value.is_string()) {
+        std::string text = value.get<std::string>();
+        if (parse_iso8601_utc(text, out)) {
+            return true;
+        }
+        char* end = nullptr;
+        double numeric = std::strtod(text.c_str(), &end);
+        if (end && end != text.c_str()) {
+            return parse_epoch_timestamp(numeric, out);
+        }
+    }
+    return false;
+}
+
+bool extract_usage_timestamp(const nlohmann::json& json, std::chrono::system_clock::time_point& out) {
+    if (json.contains("timestamp")) {
+        if (parse_timestamp_value(json["timestamp"], out)) {
+            return true;
+        }
+    }
+    if (json.contains("created")) {
+        if (parse_timestamp_value(json["created"], out)) {
+            return true;
+        }
+    }
+    if (json.contains("created_at")) {
+        if (parse_timestamp_value(json["created_at"], out)) {
+            return true;
+        }
+    }
+    if (json.contains("time")) {
+        if (parse_timestamp_value(json["time"], out)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 }
@@ -198,6 +301,8 @@ void OpencodeUsageCollector::process_file(const std::filesystem::path& path) {
     if (!file) return;
 
     MessageTotals totals;
+    std::chrono::system_clock::time_point usage_time = std::chrono::system_clock::now();
+    bool has_usage_time = false;
     try {
         auto json = nlohmann::json::parse(file, nullptr, false);
         if (!json.is_object() || !json.contains("tokens")) return;
@@ -213,6 +318,7 @@ void OpencodeUsageCollector::process_file(const std::filesystem::path& path) {
         if (json.contains("cost")) {
             totals.cost_usd = json["cost"].get<double>();
         }
+        has_usage_time = extract_usage_timestamp(json, usage_time);
     } catch (...) {
         return;
     }
@@ -221,7 +327,6 @@ void OpencodeUsageCollector::process_file(const std::filesystem::path& path) {
     std::string project_key = make_project_key(session_id);
     if (project_key.empty()) return;
 
-    auto now = std::chrono::steady_clock::now();
     auto totals_it = last_totals_.find(path.string());
     MessageTotals last = totals_it != last_totals_.end() ? totals_it->second : MessageTotals{};
 
@@ -248,7 +353,7 @@ void OpencodeUsageCollector::process_file(const std::filesystem::path& path) {
         sample.output_tokens = static_cast<uint64_t>(delta_output);
         sample.total_tokens = static_cast<uint64_t>(delta_total);
         sample.cost_usd = delta_cost;
-        sample.timestamp = now;
+        sample.timestamp = has_usage_time ? usage_time : std::chrono::system_clock::now();
 
         if (hub_) {
             hub_->record(project_key, sample);

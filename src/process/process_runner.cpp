@@ -12,6 +12,10 @@
 #include <thread>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <filesystem>
+#include <fstream>
+#include <algorithm>
 
 #if defined(__APPLE__)
 #include <util.h>
@@ -20,6 +24,86 @@
 #endif
 
 namespace diana {
+
+namespace {
+
+std::string trim_ws(std::string s) {
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.front()))) s.erase(s.begin());
+    while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) s.pop_back();
+    return s;
+}
+
+std::string read_nvm_default_version(const std::string& home_dir) {
+    std::filesystem::path alias_file = std::filesystem::path(home_dir) / ".nvm/alias/default";
+    std::error_code ec;
+    if (!std::filesystem::exists(alias_file, ec) || ec) {
+        return {};
+    }
+    std::ifstream f(alias_file);
+    if (!f) return {};
+    std::string line;
+    std::getline(f, line);
+    return trim_ws(line);
+}
+
+std::string find_nvm_version_dir(const std::string& home_dir, const std::string& alias) {
+    if (alias.empty()) return {};
+    std::filesystem::path versions_dir = std::filesystem::path(home_dir) / ".nvm/versions/node";
+    std::error_code ec;
+    if (!std::filesystem::exists(versions_dir, ec) || ec) return {};
+    
+    std::filesystem::path exact = versions_dir / alias;
+    if (std::filesystem::exists(exact / "bin", ec) && !ec) {
+        return (exact / "bin").string();
+    }
+    
+    std::string version_prefix = alias;
+    if (!version_prefix.empty() && version_prefix[0] != 'v') {
+        version_prefix = "v" + version_prefix;
+    }
+    
+    std::string best_match;
+    for (const auto& entry : std::filesystem::directory_iterator(versions_dir, ec)) {
+        if (ec || !entry.is_directory()) continue;
+        std::string name = entry.path().filename().string();
+        if (name.rfind(version_prefix, 0) == 0) {
+            std::filesystem::path bin = entry.path() / "bin";
+            if (std::filesystem::exists(bin, ec) && !ec) {
+                if (best_match.empty() || name > best_match) {
+                    best_match = bin.string();
+                }
+            }
+        }
+    }
+    return best_match;
+}
+
+std::vector<std::string> collect_nvm_bin_paths(const std::string& home_dir) {
+    std::vector<std::string> paths;
+    std::filesystem::path versions_dir = std::filesystem::path(home_dir) / ".nvm/versions/node";
+    std::error_code ec;
+    if (!std::filesystem::exists(versions_dir, ec) || ec) return paths;
+    
+    std::string default_alias = read_nvm_default_version(home_dir);
+    std::string default_bin = find_nvm_version_dir(home_dir, default_alias);
+    if (!default_bin.empty()) {
+        paths.push_back(default_bin);
+    }
+    
+    for (const auto& entry : std::filesystem::directory_iterator(versions_dir, ec)) {
+        if (ec || !entry.is_directory()) continue;
+        std::filesystem::path bin = entry.path() / "bin";
+        if (std::filesystem::exists(bin, ec) && !ec) {
+            std::string bin_str = bin.string();
+            if (std::find(paths.begin(), paths.end(), bin_str) == paths.end()) {
+                paths.push_back(bin_str);
+            }
+        }
+    }
+    return paths;
+}
+
+}
 
 ProcessRunner::ProcessRunner() = default;
 
@@ -57,6 +141,26 @@ bool ProcessRunner::start(const ProcessConfig& config) {
             }
         }
         
+        const char* current_path = std::getenv("PATH");
+        std::string new_path = "/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin";
+        const char* home = std::getenv("HOME");
+        if (home && *home) {
+            std::string home_dir = home;
+            new_path += ":" + home_dir + "/.local/bin";
+            new_path += ":" + home_dir + "/.cargo/bin";
+            new_path += ":" + home_dir + "/.npm-global/bin";
+            new_path += ":" + home_dir + "/.volta/bin";
+            new_path += ":" + home_dir + "/.asdf/shims";
+            
+            for (const auto& nvm_bin : collect_nvm_bin_paths(home_dir)) {
+                new_path += ":" + nvm_bin;
+            }
+        }
+        if (current_path && *current_path) {
+            new_path += ":";
+            new_path += current_path;
+        }
+        setenv("PATH", new_path.c_str(), 1);
         setenv("TERM", "xterm-256color", 1);
         setenv("COLORTERM", "truecolor", 1);
         setenv("LANG", "en_US.UTF-8", 1);

@@ -188,6 +188,9 @@ void TerminalPanel::render() {
                     }
                     
                     if (ImGui::BeginTabItem(session->name().c_str(), &open, flags)) {
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Double-click to rename session");
+                        }
                         active_session_idx_ = static_cast<uint32_t>(i);
                         
                         if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
@@ -203,6 +206,10 @@ void TerminalPanel::render() {
                         render_input_line(*session);
                         
                         ImGui::EndTabItem();
+                    } else {
+                        if (ImGui::IsItemHovered()) {
+                            ImGui::SetTooltip("Double-click to rename session");
+                        }
                     }
                     
                     if (!open) {

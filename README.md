@@ -26,6 +26,7 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 
 - Multi-tab terminal emulator for running AI agents (VT100/xterm via libvterm)
 - Supports Claude Code, Codex, and OpenCode
+- Automatic executable detection for agents installed via nvm, Volta, asdf, Cargo, or global npm
 - Provider/model configuration switching with atomic file updates
 - Real-time token usage monitoring with charts
 - Per-project token metrics tracking
@@ -34,6 +35,7 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 - OpenCode multi-profile configuration management
 - Unified Agent Config panel with tab switching and fast in-app edits
 - GitHub-style activity heatmap for token usage
+- Double-click session tabs to rename
 
 ## Supported Agents
 
@@ -144,10 +146,20 @@ Generate an app-specific password at [appleid.apple.com](https://appleid.apple.c
 ### Terminal Panel (Center)
 
 - Click "+" to create a terminal session
-- Select agent type (Claude Code, Codex, OpenCode)
+- Select agent type (Claude Code, Codex, OpenCode, Shell)
 - Click "Start" to launch the agent
+- Double-click a session tab to rename it
 - Type in the input field and press Enter to send commands
 - Click "Stop" to terminate the agent
+
+Diana automatically detects agent executables installed via:
+
+- **nvm**: `~/.nvm/versions/node/*/bin/` (prioritizes default version from `~/.nvm/alias/default`)
+- **Volta**: `~/.volta/bin/`
+- **asdf**: `~/.asdf/shims/`
+- **Cargo**: `~/.cargo/bin/`
+- **npm global**: `~/.npm-global/bin/`, `~/.local/bin/`
+- **Homebrew**: `/opt/homebrew/bin/`, `/usr/local/bin/`
 
 ### Claude Code Panel (Left)
 
@@ -376,12 +388,12 @@ The project includes 87 unit tests covering core functionality:
 
 - [ ] Claude Code Skill/MCP marketplace browser
 - [x] OpenCode configuration panel (similar to Claude Code)
-- [ ] Codex configuration panel (similar to Claude Code)
+- [x] Codex configuration panel (similar to Claude Code)
 - [x] Agent token stats panel with per-agent aggregation
 - [x] Per-project token metrics tracking
 - [x] GitHub-style activity heatmap
-- [ ] Session history and replay
-- [ ] Cost estimation and budget alerts
+- [x] Session history and replay
+- [x] Cost estimation and budget alerts
 
 ## Dependencies
 

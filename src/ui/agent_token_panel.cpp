@@ -314,8 +314,11 @@ void AgentTokenPanel::render_heatmap() {
     float legend_y = canvas_pos.y + month_label_height + 7 * (cell_size + cell_gap) + 8;
     float legend_x = canvas_pos.x + label_width;
     
+    float text_height = ImGui::GetTextLineHeight();
+    float square_y_offset = (text_height - cell_size) * 0.5f;
+    
     draw_list->AddText(ImVec2(legend_x, legend_y), label_color, "Less");
-    legend_x += 30;
+    legend_x += ImGui::CalcTextSize("Less").x + 4.0f;
     
     uint8_t accent_r = theme.accent & 0xFF;
     uint8_t accent_g = (theme.accent >> 8) & 0xFF;
@@ -332,13 +335,13 @@ void AgentTokenPanel::render_heatmap() {
         uint8_t b = static_cast<uint8_t>(bg_b + (accent_b - bg_b) * levels[i]);
         
         draw_list->AddRectFilled(
-            ImVec2(legend_x + i * (cell_size + 2), legend_y),
-            ImVec2(legend_x + i * (cell_size + 2) + cell_size, legend_y + cell_size),
+            ImVec2(legend_x + i * (cell_size + 2), legend_y + square_y_offset),
+            ImVec2(legend_x + i * (cell_size + 2) + cell_size, legend_y + square_y_offset + cell_size),
             IM_COL32(r, g, b, 255), 2.0f
         );
     }
     
-    legend_x += 5 * (cell_size + 2) + 4;
+    legend_x += 5 * (cell_size + 2) + 2.0f;
     draw_list->AddText(ImVec2(legend_x, legend_y), label_color, "More");
     
     ImGui::EndChild();

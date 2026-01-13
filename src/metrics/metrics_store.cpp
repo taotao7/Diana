@@ -19,7 +19,7 @@ void MetricsStore::record_sample(const TokenSample& sample) {
 
 void MetricsStore::record_usage(uint64_t input, uint64_t output, double cost) {
     TokenSample sample;
-    sample.timestamp = std::chrono::steady_clock::now();
+    sample.timestamp = std::chrono::system_clock::now();
     sample.input_tokens = input;
     sample.output_tokens = output;
     sample.total_tokens = input + output;
@@ -53,11 +53,15 @@ std::array<float, MetricsStore::kHistoryHours> MetricsStore::get_rate_history() 
         return history;
     }
     
-    auto now = std::chrono::steady_clock::now();
+    auto now = std::chrono::system_clock::now();
     
     for (size_t i = 0; i < count_; ++i) {
         size_t idx = (head_ + kMaxSamples - 1 - i) % kMaxSamples;
         const auto& s = samples_[idx];
+        
+        if (s.timestamp > now) {
+            continue;
+        }
         
         auto age = std::chrono::duration_cast<std::chrono::hours>(now - s.timestamp);
         if (static_cast<size_t>(age.count()) >= kHistoryHours) {

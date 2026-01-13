@@ -9,7 +9,7 @@
 namespace diana {
 
 struct TokenSample {
-    std::chrono::steady_clock::time_point timestamp;
+    std::chrono::system_clock::time_point timestamp;
     uint64_t input_tokens = 0;
     uint64_t output_tokens = 0;
     uint64_t total_tokens = 0;
