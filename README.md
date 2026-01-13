@@ -27,16 +27,16 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 ### Homebrew (Recommended)
 
 ```bash
-brew install --cask https://raw.githubusercontent.com/taotao7/Diana/v0.1.1/homebrew/Casks/diana.rb
+brew tap taotao7/diana
+brew install --cask diana
 ```
 
 This installs Diana.app to your Applications folder.
 
-If you set up the tap repository `taotao7/homebrew-diana` (created automatically by the release workflow when `HOMEBREW_TAP_TOKEN` is configured), you can also:
+If the tap is not available yet, you can install directly from this repo:
 
 ```bash
-brew tap taotao7/diana
-brew install --cask diana
+brew install --cask https://raw.githubusercontent.com/taotao7/Diana/v0.1.1/homebrew/Casks/diana.rb
 ```
 
 > **Note:** Currently only Apple Silicon (ARM64) Macs are supported.
