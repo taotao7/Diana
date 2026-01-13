@@ -4,9 +4,97 @@
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#include <cstdlib>
+
+#ifndef DIANA_VERSION
+#define DIANA_VERSION "0.1.0"
+#endif
+
 extern "C" void diana_request_exit();
 
 namespace diana {
+
+static bool show_about_dialog = false;
+
+static void open_url(const char* url) {
+#if defined(__APPLE__)
+    std::string cmd = std::string("open \"") + url + "\"";
+    std::system(cmd.c_str());
+#elif defined(__linux__)
+    std::string cmd = std::string("xdg-open \"") + url + "\"";
+    std::system(cmd.c_str());
+#endif
+}
+
+static void render_about_dialog() {
+    if (!show_about_dialog) return;
+    
+    ImGui::OpenPopup("About Diana");
+    
+    ImVec2 center = ImGui::GetMainViewport()->GetCenter();
+    ImGui::SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowSize(ImVec2(400, 280), ImGuiCond_Appearing);
+    
+    if (ImGui::BeginPopupModal("About Diana", &show_about_dialog, ImGuiWindowFlags_NoResize)) {
+        const auto& theme = get_current_theme();
+        
+        ImGui::PushFont(ImGui::GetIO().Fonts->Fonts[0]);
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize("Diana").x) * 0.5f);
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(theme.accent), "Diana");
+        ImGui::PopFont();
+        
+        ImGui::Spacing();
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - ImGui::CalcTextSize("Your Agent's Best Handler").x) * 0.5f);
+        ImGui::TextDisabled("Your Agent's Best Handler");
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        ImGui::Text("Version:");
+        ImGui::SameLine(120);
+        ImGui::Text("%s", DIANA_VERSION);
+        
+        ImGui::Text("Platform:");
+        ImGui::SameLine(120);
+#if defined(__APPLE__)
+        ImGui::Text("macOS");
+#elif defined(__linux__)
+        ImGui::Text("Linux");
+#else
+        ImGui::Text("Unknown");
+#endif
+        
+        ImGui::Text("Dear ImGui:");
+        ImGui::SameLine(120);
+        ImGui::Text("%s", IMGUI_VERSION);
+        
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        
+        ImGui::TextDisabled("Mission control for AI coding agents.");
+        ImGui::TextDisabled("Unified config, token tracking, multi-tab terminal.");
+        
+        ImGui::Spacing();
+        ImGui::Spacing();
+        
+        float button_width = 120;
+        float total_width = button_width * 2 + ImGui::GetStyle().ItemSpacing.x;
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - total_width) * 0.5f);
+        
+        if (ImGui::Button("GitHub", ImVec2(button_width, 0))) {
+            open_url("https://github.com/taotao7/Diana");
+        }
+        ImGui::SameLine();
+        if (ImGui::Button("Close", ImVec2(button_width, 0))) {
+            show_about_dialog = false;
+            ImGui::CloseCurrentPopup();
+        }
+        
+        ImGui::EndPopup();
+    }
+}
 
 void render_dockspace(bool first_frame) {
     static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
@@ -63,17 +151,19 @@ void render_dockspace(bool first_frame) {
 
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("Import Config...")) {}
-            if (ImGui::MenuItem("Export Config...")) {}
+            if (ImGui::MenuItem("Import Config...", "Ctrl+I")) {}
+            if (ImGui::MenuItem("Export Config...", "Ctrl+E")) {}
             ImGui::Separator();
-            if (ImGui::MenuItem("Exit")) { diana_request_exit(); }
+#if !defined(__APPLE__)
+            if (ImGui::MenuItem("Exit", "Alt+F4")) { diana_request_exit(); }
+#endif
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View")) {
-            if (ImGui::MenuItem("Terminal")) {}
-            if (ImGui::MenuItem("Claude Code")) {}
-            if (ImGui::MenuItem("Token Metrics")) {}
-            if (ImGui::MenuItem("Agent Token Stats")) {}
+            if (ImGui::MenuItem("Terminal", "Ctrl+1")) {}
+            if (ImGui::MenuItem("Agent Config", "Ctrl+2")) {}
+            if (ImGui::MenuItem("Token Metrics", "Ctrl+3")) {}
+            if (ImGui::MenuItem("Agent Token Stats", "Ctrl+4")) {}
             ImGui::Separator();
             if (ImGui::BeginMenu("Theme")) {
                 ThemeMode mode = get_theme_mode();
@@ -92,11 +182,22 @@ void render_dockspace(bool first_frame) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("Help")) {
-            if (ImGui::MenuItem("About Diana")) {}
+            if (ImGui::MenuItem("Documentation")) {
+                open_url("https://github.com/taotao7/Diana#readme");
+            }
+            if (ImGui::MenuItem("Report Issue")) {
+                open_url("https://github.com/taotao7/Diana/issues");
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("About Diana")) {
+                show_about_dialog = true;
+            }
             ImGui::EndMenu();
         }
         ImGui::EndMenuBar();
     }
+    
+    render_about_dialog();
 
     ImGui::End();
 }
