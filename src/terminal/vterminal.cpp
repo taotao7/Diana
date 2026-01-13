@@ -257,4 +257,12 @@ void VTerminal::keyboard_unichar(uint32_t c, int modifiers) {
     vterm_keyboard_unichar(impl_->vt, c, static_cast<VTermModifier>(modifiers));
 }
 
+void VTerminal::keyboard_start_paste() {
+    vterm_keyboard_start_paste(impl_->vt);
+}
+
+void VTerminal::keyboard_end_paste() {
+    vterm_keyboard_end_paste(impl_->vt);
+}
+
 }

@@ -39,6 +39,53 @@ void append_if_exists(std::vector<std::string>& items, const std::filesystem::pa
     }
 }
 
+bool decode_next_utf8(const std::string& text, size_t& index, uint32_t& codepoint) {
+    if (index >= text.size()) {
+        return false;
+    }
+
+    unsigned char c0 = static_cast<unsigned char>(text[index]);
+    if (c0 < 0x80) {
+        codepoint = c0;
+        index += 1;
+        return true;
+    }
+
+    if ((c0 >> 5) == 0x6 && index + 1 < text.size()) {
+        unsigned char c1 = static_cast<unsigned char>(text[index + 1]);
+        if ((c1 & 0xC0) == 0x80) {
+            codepoint = ((c0 & 0x1F) << 6) | (c1 & 0x3F);
+            index += 2;
+            return true;
+        }
+    }
+
+    if ((c0 >> 4) == 0xE && index + 2 < text.size()) {
+        unsigned char c1 = static_cast<unsigned char>(text[index + 1]);
+        unsigned char c2 = static_cast<unsigned char>(text[index + 2]);
+        if ((c1 & 0xC0) == 0x80 && (c2 & 0xC0) == 0x80) {
+            codepoint = ((c0 & 0x0F) << 12) | ((c1 & 0x3F) << 6) | (c2 & 0x3F);
+            index += 3;
+            return true;
+        }
+    }
+
+    if ((c0 >> 3) == 0x1E && index + 3 < text.size()) {
+        unsigned char c1 = static_cast<unsigned char>(text[index + 1]);
+        unsigned char c2 = static_cast<unsigned char>(text[index + 2]);
+        unsigned char c3 = static_cast<unsigned char>(text[index + 3]);
+        if ((c1 & 0xC0) == 0x80 && (c2 & 0xC0) == 0x80 && (c3 & 0xC0) == 0x80) {
+            codepoint = ((c0 & 0x07) << 18) | ((c1 & 0x3F) << 12) | ((c2 & 0x3F) << 6) | (c3 & 0x3F);
+            index += 4;
+            return true;
+        }
+    }
+
+    codepoint = 0xFFFD;
+    index += 1;
+    return true;
+}
+
 std::string read_nvm_default_version(const std::string& home_dir) {
     std::filesystem::path alias_file = std::filesystem::path(home_dir) / ".nvm/alias/default";
     std::error_code ec;
@@ -318,6 +365,32 @@ void SessionController::send_char(TerminalSession& session, uint32_t codepoint) 
     }
     
     session.terminal().keyboard_unichar(codepoint);
+    std::string output = session.terminal().get_output();
+    if (!output.empty()) {
+        it->second->write_stdin(output);
+    }
+}
+
+void SessionController::send_paste(TerminalSession& session, const std::string& text) {
+    auto it = runners_.find(session.id());
+    if (it == runners_.end() || !it->second || !it->second->is_running()) {
+        return;
+    }
+    if (text.empty()) {
+        return;
+    }
+
+    session.terminal().keyboard_start_paste();
+    size_t index = 0;
+    while (index < text.size()) {
+        uint32_t codepoint = 0;
+        if (!decode_next_utf8(text, index, codepoint)) {
+            break;
+        }
+        session.terminal().keyboard_unichar(codepoint);
+    }
+    session.terminal().keyboard_end_paste();
+
     std::string output = session.terminal().get_output();
     if (!output.empty()) {
         it->second->write_stdin(output);

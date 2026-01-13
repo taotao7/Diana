@@ -863,8 +863,19 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
             }
             
             bool ctrl_pressed = diana_is_ctrl_pressed();
+            bool handled_paste = false;
             
-            if (ctrl_pressed && !has_ime_input) {
+            if (!has_ime_input) {
+                bool paste_pressed = ImGui::IsKeyPressed(ImGuiKey_V) && (io.KeyCtrl || io.KeySuper);
+                if (paste_pressed) {
+                    if (const char* clip = ImGui::GetClipboardText(); clip && clip[0] != '\0') {
+                        controller_.send_paste(session, clip);
+                    }
+                    handled_paste = true;
+                }
+            }
+            
+            if (!handled_paste && ctrl_pressed && !has_ime_input) {
                 if (ImGui::IsKeyPressed(ImGuiKey_C)) {
                     controller_.send_raw_key(session, "\x03");
                 }
@@ -938,7 +949,7 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                     controller_.send_raw_key(session, "\x1f");
                 }
             }
-            else if (!has_ime_input) {
+            else if (!handled_paste && !has_ime_input) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
                     if (io.KeyShift) {
                         controller_.send_char(session, '\n');
@@ -987,7 +998,7 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                 }
             }
             
-            if (!io.KeyCtrl) {
+            if (!handled_paste && !io.KeyCtrl && !io.KeySuper) {
                 for (int i = 0; i < io.InputQueueCharacters.Size; ++i) {
                     ImWchar c = io.InputQueueCharacters[i];
                     if (c > 0 && c != 127) {

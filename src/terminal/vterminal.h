@@ -53,6 +53,8 @@ public:
     // Keyboard input - generates correct escape sequences based on terminal mode
     void keyboard_key(int key);  // Use VTermKey enum values
     void keyboard_unichar(uint32_t c, int modifiers = 0);
+    void keyboard_start_paste();
+    void keyboard_end_paste();
     
     void set_default_colors(uint32_t fg, uint32_t bg);
     
