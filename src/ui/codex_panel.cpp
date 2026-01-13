@@ -109,7 +109,7 @@ void CodexPanel::render_content() {
 }
 
 void CodexPanel::render_profile_list() {
-    if (ImGui::Button("+ New Profile", ImVec2(-1, 0))) {
+    if (ImGui::Button("+ New", ImVec2(-1, 0))) {
         show_new_profile_popup_ = true;
     }
     

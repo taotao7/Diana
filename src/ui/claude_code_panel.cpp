@@ -44,11 +44,11 @@ void ClaudeCodePanel::render_content() {
     ImGui::EndChild();
     
     if (show_new_profile_popup_) {
-        ImGui::OpenPopup("New Profile");
+        ImGui::OpenPopup("New Claude Profile");
         show_new_profile_popup_ = false;
     }
     
-    if (ImGui::BeginPopupModal("New Profile", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (ImGui::BeginPopupModal("New Claude Profile", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("Create a new configuration profile");
         ImGui::Separator();
         
@@ -86,11 +86,11 @@ void ClaudeCodePanel::render_content() {
     }
     
     if (show_delete_confirm_) {
-        ImGui::OpenPopup("Delete Profile?");
+        ImGui::OpenPopup("Delete Claude Profile?");
         show_delete_confirm_ = false;
     }
     
-    if (ImGui::BeginPopupModal("Delete Profile?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (ImGui::BeginPopupModal("Delete Claude Profile?", nullptr, ImGuiWindowFlags_AlwaysAutoResize)) {
         ImGui::Text("Delete profile \"%s\"?", editing_profile_name_.c_str());
         ImGui::Text("This cannot be undone.");
         ImGui::Separator();
