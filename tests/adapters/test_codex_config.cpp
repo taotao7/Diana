@@ -50,7 +50,7 @@ TEST(CodexConfigTest, ModelProvidersRoundtrip) {
     CodexConfig restored = CodexConfig::from_toml(tbl);
     
     ASSERT_EQ(restored.model_providers.size(), 1);
-    ASSERT_TRUE(restored.model_providers.contains("openai"));
+    ASSERT_TRUE(restored.model_providers.find("openai") != restored.model_providers.end());
     
     const auto& restored_provider = restored.model_providers.at("openai");
     EXPECT_EQ(restored_provider.name, "OpenAI");
@@ -75,7 +75,7 @@ TEST(CodexConfigTest, McpServersRoundtrip) {
     CodexConfig restored = CodexConfig::from_toml(tbl);
     
     ASSERT_EQ(restored.mcp_servers.size(), 1);
-    ASSERT_TRUE(restored.mcp_servers.contains("filesystem"));
+    ASSERT_TRUE(restored.mcp_servers.find("filesystem") != restored.mcp_servers.end());
     
     const auto& restored_server = restored.mcp_servers.at("filesystem");
     EXPECT_EQ(restored_server.command, "npx");

@@ -22,6 +22,27 @@ Diana is the ultimate mission control for your AI agents. Just as every Agent 47
 >
 > This way, each agent operates in its own directory with isolated token tracking.
 
+## Installation
+
+### Homebrew (Recommended)
+
+```bash
+brew tap taotao7/diana
+brew install --cask diana
+```
+
+This installs Diana.app to your Applications folder.
+
+> **Note:** Currently only Apple Silicon (ARM64) Macs are supported.
+
+### Download DMG
+
+Download the latest DMG from [GitHub Releases](https://github.com/taotao7/Diana/releases).
+
+### Build from Source
+
+See the [Build](#build) section below.
+
 ## Features
 
 - Multi-tab terminal emulator for running AI agents (VT100/xterm via libvterm)

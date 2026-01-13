@@ -6,7 +6,7 @@ TEST(MultiMetricsStoreTest, RecordAndRetrieve) {
     diana::MultiMetricsStore store;
     
     diana::TokenSample sample;
-    sample.timestamp = std::chrono::steady_clock::now();
+    sample.timestamp = std::chrono::system_clock::now();
     sample.input_tokens = 100;
     sample.output_tokens = 50;
     sample.total_tokens = 150;
@@ -30,13 +30,13 @@ TEST(MultiMetricsStoreTest, MultipleProjects) {
     diana::MultiMetricsStore store;
     
     diana::TokenSample sample_a;
-    sample_a.timestamp = std::chrono::steady_clock::now();
+    sample_a.timestamp = std::chrono::system_clock::now();
     sample_a.input_tokens = 100;
     sample_a.output_tokens = 50;
     sample_a.total_tokens = 150;
     
     diana::TokenSample sample_b;
-    sample_b.timestamp = std::chrono::steady_clock::now();
+    sample_b.timestamp = std::chrono::system_clock::now();
     sample_b.input_tokens = 200;
     sample_b.output_tokens = 100;
     sample_b.total_tokens = 300;
@@ -68,7 +68,7 @@ TEST(MultiMetricsStoreTest, ListSources) {
     diana::MultiMetricsStore store;
     
     diana::TokenSample sample;
-    sample.timestamp = std::chrono::steady_clock::now();
+    sample.timestamp = std::chrono::system_clock::now();
     sample.input_tokens = 100;
     sample.output_tokens = 50;
     sample.total_tokens = 150;
@@ -96,7 +96,7 @@ TEST(MultiMetricsStoreTest, Clear) {
     diana::MultiMetricsStore store;
     
     diana::TokenSample sample;
-    sample.timestamp = std::chrono::steady_clock::now();
+    sample.timestamp = std::chrono::system_clock::now();
     sample.input_tokens = 100;
     sample.output_tokens = 50;
     sample.total_tokens = 150;
@@ -117,7 +117,7 @@ TEST(MultiMetricsStoreTest, ClearSource) {
     diana::MultiMetricsStore store;
     
     diana::TokenSample sample;
-    sample.timestamp = std::chrono::steady_clock::now();
+    sample.timestamp = std::chrono::system_clock::now();
     sample.input_tokens = 100;
     sample.output_tokens = 50;
     sample.total_tokens = 150;
@@ -153,7 +153,7 @@ TEST(MultiMetricsStoreTest, ThreadSafety) {
     
     std::thread writer1([&store, num_records]() {
         diana::TokenSample sample;
-        sample.timestamp = std::chrono::steady_clock::now();
+        sample.timestamp = std::chrono::system_clock::now();
         sample.input_tokens = 10;
         sample.output_tokens = 5;
         sample.total_tokens = 15;
@@ -165,7 +165,7 @@ TEST(MultiMetricsStoreTest, ThreadSafety) {
     
     std::thread writer2([&store, num_records]() {
         diana::TokenSample sample;
-        sample.timestamp = std::chrono::steady_clock::now();
+        sample.timestamp = std::chrono::system_clock::now();
         sample.input_tokens = 20;
         sample.output_tokens = 10;
         sample.total_tokens = 30;
