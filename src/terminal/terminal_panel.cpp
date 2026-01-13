@@ -170,7 +170,8 @@ void TerminalPanel::render() {
                     
                     if (is_renaming) {
                         ImGui::SetNextItemWidth(100);
-                        if (ImGui::InputText("##RenameTab", rename_buffer_, sizeof(rename_buffer_), 
+                        std::string rename_id = "##RenameTab" + std::to_string(session->id());
+                        if (ImGui::InputText(rename_id.c_str(), rename_buffer_, sizeof(rename_buffer_), 
                             ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll)) {
                             if (rename_buffer_[0] != '\0') {
                                 session->set_name(rename_buffer_);
@@ -187,7 +188,8 @@ void TerminalPanel::render() {
                         ImGui::SameLine();
                     }
                     
-                    if (ImGui::BeginTabItem(session->name().c_str(), &open, flags)) {
+                    std::string tab_id = session->name() + "##" + std::to_string(session->id());
+                    if (ImGui::BeginTabItem(tab_id.c_str(), &open, flags)) {
                         if (ImGui::IsItemHovered()) {
                             ImGui::SetTooltip("Double-click to rename session");
                         }
@@ -369,6 +371,7 @@ void TerminalPanel::close_session(uint32_t id) {
 }
 
 void TerminalPanel::render_control_bar(TerminalSession& session) {
+    ImGui::PushID(static_cast<int>(session.id()));
     ImGui::PushItemWidth(120);
     
     int app_idx = static_cast<int>(session.config().app);
@@ -446,6 +449,7 @@ void TerminalPanel::render_control_bar(TerminalSession& session) {
     ImGui::TextDisabled("| %s", TerminalSession::state_name(session.state()));
     
     ImGui::PopItemWidth();
+    ImGui::PopID();
 }
 
 void TerminalPanel::handle_start_stop(TerminalSession& session) {
@@ -512,7 +516,8 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
     
     ImGuiWindowFlags flags = ImGuiWindowFlags_NoNavInputs;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0, 0));
-    bool child_open = ImGui::BeginChild("OutputArea", ImVec2(0, 0), true, flags);
+    std::string child_id = "OutputArea##" + std::to_string(session.id());
+    bool child_open = ImGui::BeginChild(child_id.c_str(), ImVec2(0, 0), true, flags);
     ImGui::PopStyleVar();
     if (child_open) {
         ImVec2 content_size = ImGui::GetContentRegionAvail();

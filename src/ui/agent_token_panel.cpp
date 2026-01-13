@@ -32,6 +32,12 @@ void AgentTokenPanel::update() {
     bool agent_changed = selected_agent_ != last_selected_agent_;
     auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_update_).count();
     
+    if (agent_changed) {
+        daily_data_.clear();
+        cached_stats_ = AgentTypeStats{};
+        cached_sessions_.clear();
+    }
+    
     if (agent_changed || elapsed >= 1) {
         daily_data_ = store_->get_daily_data(selected_agent_);
         cached_stats_ = store_->get_stats(selected_agent_);
