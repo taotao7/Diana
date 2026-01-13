@@ -32,7 +32,7 @@ brew install --cask https://raw.githubusercontent.com/taotao7/Diana/v0.1.1/homeb
 
 This installs Diana.app to your Applications folder.
 
-If you maintain a tap repository at `taotao7/homebrew-diana`, you can also:
+If you set up the tap repository `taotao7/homebrew-diana` (created automatically by the release workflow when `HOMEBREW_TAP_TOKEN` is configured), you can also:
 
 ```bash
 brew tap taotao7/diana

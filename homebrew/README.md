@@ -4,10 +4,15 @@ This directory contains Homebrew formulas for installing Diana.
 
 ## Setup Homebrew Tap
 
-To allow users to install Diana via Homebrew, you need to create a separate repository named `homebrew-diana`.
+To allow users to install Diana via Homebrew, you need a separate repository named `homebrew-diana`.
 
-### Step 1: Create the Tap Repository
+### Step 1: Create or Bootstrap the Tap Repository
 
+**Option A: Let CI create it (recommended)**
+1. Create a GitHub token with `repo` scope and add it as `HOMEBREW_TAP_TOKEN` in this repo.
+2. Run the Release workflow (tag push or `workflow_dispatch`). The workflow will create `homebrew-diana` if it doesn't exist.
+
+**Option B: Create it manually**
 1. Create a new GitHub repository: `taotao7/homebrew-diana`
 
 2. Clone it and copy the formula files:
@@ -118,4 +123,4 @@ Consider adding a GitHub Actions workflow to automate:
 - Calculating SHA256 hashes
 - Updating the homebrew-diana repository
 
-See `.github/workflows/release.yml` for an example workflow.
+See `.github/workflows/release.yml` for the workflow that builds releases and updates (or creates) the tap.

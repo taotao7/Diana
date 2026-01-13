@@ -120,22 +120,51 @@ jobs:
         id: hashes
         run: |
           VERSION=${{ steps.version.outputs.version }}
+          OWNER=${{ github.repository_owner }}
+          REPO=${{ github.event.repository.name }}
           
-          curl -sL "https://github.com/taotao7/Diana/archive/refs/tags/v${VERSION}.tar.gz" -o source.tar.gz
+          curl -sL "https://github.com/${OWNER}/${REPO}/archive/refs/tags/v${VERSION}.tar.gz" -o source.tar.gz
           SOURCE_SHA=$(shasum -a 256 source.tar.gz | cut -d' ' -f1)
           echo "source_sha=${SOURCE_SHA}" >> $GITHUB_OUTPUT
           
-          curl -sL "https://github.com/taotao7/Diana/releases/download/v${VERSION}/Diana-${VERSION}-arm64.dmg" -o arm64.dmg || true
+          curl -sL "https://github.com/${OWNER}/${REPO}/releases/download/v${VERSION}/Diana-${VERSION}-arm64.dmg" -o arm64.dmg || true
           
           if [ -f arm64.dmg ]; then
             ARM_SHA=$(shasum -a 256 arm64.dmg | cut -d' ' -f1)
             echo "arm_sha=${ARM_SHA}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Ensure homebrew-diana exists
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+        run: |
+          if [ -z "${HOMEBREW_TAP_TOKEN}" ]; then
+            echo "HOMEBREW_TAP_TOKEN is required to create/update the tap repository."
+            exit 1
+          fi
+
+          OWNER=${{ github.repository_owner }}
+          TAP_REPO="homebrew-diana"
+          API="https://api.github.com"
+          AUTH_HEADER="Authorization: token ${HOMEBREW_TAP_TOKEN}"
+
+          status=$(curl -s -o /dev/null -w "%{http_code}" -H "${AUTH_HEADER}" "${API}/repos/${OWNER}/${TAP_REPO}")
+          if [ "${status}" -ne 200 ]; then
+            payload="{\"name\":\"${TAP_REPO}\",\"private\":false,\"auto_init\":true}"
+            create_status=$(curl -s -o /dev/null -w "%{http_code}" -H "${AUTH_HEADER}" -H "Accept: application/vnd.github+json" -d "${payload}" "${API}/user/repos")
+            if [ "${create_status}" -ne 201 ]; then
+              create_status=$(curl -s -o /dev/null -w "%{http_code}" -H "${AUTH_HEADER}" -H "Accept: application/vnd.github+json" -d "${payload}" "${API}/orgs/${OWNER}/repos")
+            fi
+            if [ "${create_status}" -ne 201 ]; then
+              echo "Failed to create ${OWNER}/${TAP_REPO}. Ensure HOMEBREW_TAP_TOKEN has repo scope."
+              exit 1
+            fi
+          fi
+
       - name: Checkout homebrew-diana
         uses: actions/checkout@v4
         with:
-          repository: taotao7/homebrew-diana
+          repository: ${{ github.repository_owner }}/homebrew-diana
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-diana
 
