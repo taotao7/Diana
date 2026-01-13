@@ -226,11 +226,17 @@ std::string get_working_dir() {
 SessionController::SessionController() = default;
 
 SessionController::~SessionController() {
+    // Clear callbacks before destruction to prevent IO threads from accessing event_queue_
     for (auto& [id, runner] : runners_) {
-        if (runner && runner->is_running()) {
-            runner->stop();
+        if (runner) {
+            runner->set_output_callback(nullptr);
+            runner->set_exit_callback(nullptr);
+            if (runner->is_running()) {
+                runner->stop();
+            }
         }
     }
+    runners_.clear();
 }
 
 void SessionController::start_session(TerminalSession& session) {
