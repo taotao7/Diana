@@ -84,7 +84,8 @@ brew install diana
 
 ### Option 3: Direct install without tapping
 ```bash
-brew install taotao7/diana/diana
+brew install --cask https://raw.githubusercontent.com/taotao7/Diana/v0.1.1/homebrew/Casks/diana.rb
+brew install https://raw.githubusercontent.com/taotao7/Diana/v0.1.1/homebrew/Formula/diana.rb
 ```
 
 ## Directory Structure

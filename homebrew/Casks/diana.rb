@@ -1,6 +1,6 @@
 cask "diana" do
   version "0.1.1"
-  sha256 "PLACEHOLDER_ARM64_SHA256"
+  sha256 "722f16cf90f55e59d9315ed0359d6bfe115f1ac90c44475c43a7323462ec3c1d"
 
   url "https://github.com/taotao7/Diana/releases/download/v#{version}/Diana-#{version}-arm64.dmg"
 
