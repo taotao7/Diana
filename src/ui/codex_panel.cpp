@@ -8,6 +8,7 @@ CodexPanel::CodexPanel() {
     new_profile_name_.resize(64);
     new_provider_id_.resize(64);
     new_mcp_id_.resize(64);
+    new_project_path_.resize(256);
 }
 
 void CodexPanel::render() {
@@ -269,6 +270,12 @@ void CodexPanel::render_config_editor() {
         render_advanced_section();
         ImGui::Unindent();
     }
+
+    if (ImGui::CollapsingHeader("Projects")) {
+        ImGui::Indent();
+        render_projects_section();
+        ImGui::Unindent();
+    }
 }
 
 void CodexPanel::render_basic_settings() {
@@ -513,6 +520,9 @@ void CodexPanel::render_mcp_section() {
                 config_modified_ = true;
             }
             
+            ImGui::Text("Args:");
+            render_string_list_inline("##Args", server.args);
+            
             std::strncpy(buf, server.url.c_str(), sizeof(buf) - 1);
             buf[sizeof(buf) - 1] = '\0';
             ImGui::Text("URL:");
@@ -537,6 +547,81 @@ void CodexPanel::render_mcp_section() {
                 config_modified_ = true;
             }
             
+            ImGui::Spacing();
+            ImGui::TextDisabled("Timeouts");
+            ImGui::Separator();
+            
+            int startup_timeout = server.startup_timeout_sec.value_or(0);
+            ImGui::Text("Startup Timeout (sec):");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(100);
+            if (ImGui::InputInt("##StartupTimeout", &startup_timeout)) {
+                if (startup_timeout > 0) {
+                    server.startup_timeout_sec = startup_timeout;
+                } else {
+                    server.startup_timeout_sec = std::nullopt;
+                }
+                config_modified_ = true;
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(0 = default)");
+            
+            int tool_timeout = server.tool_timeout_sec.value_or(0);
+            ImGui::Text("Tool Timeout (sec):");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(100);
+            if (ImGui::InputInt("##ToolTimeout", &tool_timeout)) {
+                if (tool_timeout > 0) {
+                    server.tool_timeout_sec = tool_timeout;
+                } else {
+                    server.tool_timeout_sec = std::nullopt;
+                }
+                config_modified_ = true;
+            }
+            ImGui::SameLine();
+            ImGui::TextDisabled("(0 = default)");
+            
+            ImGui::Spacing();
+            ImGui::TextDisabled("Environment");
+            ImGui::Separator();
+            
+            ImGui::Text("Env (key=value):");
+            render_key_value_map("##Env", server.env);
+            
+            ImGui::Text("Env Vars (passthrough):");
+            render_string_list_inline("##EnvVars", server.env_vars);
+            
+            ImGui::Spacing();
+            ImGui::TextDisabled("Tool Filtering");
+            ImGui::Separator();
+            
+            ImGui::Text("Enabled Tools:");
+            render_string_list_inline("##EnabledTools", server.enabled_tools);
+            
+            ImGui::Text("Disabled Tools:");
+            render_string_list_inline("##DisabledTools", server.disabled_tools);
+            
+            ImGui::Spacing();
+            ImGui::TextDisabled("HTTP Settings (Remote)");
+            ImGui::Separator();
+            
+            std::strncpy(buf, server.bearer_token_env_var.c_str(), sizeof(buf) - 1);
+            buf[sizeof(buf) - 1] = '\0';
+            ImGui::Text("Bearer Token Env Var:");
+            ImGui::SameLine();
+            ImGui::SetNextItemWidth(200);
+            if (ImGui::InputText("##BearerToken", buf, sizeof(buf))) {
+                server.bearer_token_env_var = buf;
+                config_modified_ = true;
+            }
+            
+            ImGui::Text("HTTP Headers:");
+            render_key_value_map("##HttpHeaders", server.http_headers);
+            
+            ImGui::Text("Env HTTP Headers:");
+            render_key_value_map("##EnvHttpHeaders", server.env_http_headers);
+            
+            ImGui::Spacing();
             if (ImGui::Button("Remove Server")) {
                 to_remove.push_back(id);
             }
@@ -785,6 +870,161 @@ void CodexPanel::import_from_config() {
         select_profile(name);
         status_message_ = "Imported: " + name;
         status_time_ = 2.0f;
+    }
+}
+
+void CodexPanel::render_string_list_inline(const char* label, std::vector<std::string>& list) {
+    ImGui::PushID(label);
+    
+    static char new_item[256] = "";
+    ImGui::SetNextItemWidth(150);
+    ImGui::InputTextWithHint("##NewItem", "Add item", new_item, sizeof(new_item));
+    ImGui::SameLine();
+    if (ImGui::SmallButton("+")) {
+        if (new_item[0] != '\0') {
+            list.push_back(new_item);
+            new_item[0] = '\0';
+            config_modified_ = true;
+        }
+    }
+    
+    int to_remove = -1;
+    for (size_t i = 0; i < list.size(); ++i) {
+        ImGui::PushID(static_cast<int>(i));
+        
+        char buf[256];
+        std::strncpy(buf, list[i].c_str(), sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        
+        ImGui::SetNextItemWidth(150);
+        if (ImGui::InputText("##Item", buf, sizeof(buf))) {
+            list[i] = buf;
+            config_modified_ = true;
+        }
+        
+        ImGui::SameLine();
+        if (ImGui::SmallButton("X")) {
+            to_remove = static_cast<int>(i);
+        }
+        
+        if (i + 1 < list.size()) {
+            ImGui::SameLine();
+        }
+        
+        ImGui::PopID();
+    }
+    
+    if (to_remove >= 0) {
+        list.erase(list.begin() + to_remove);
+        config_modified_ = true;
+    }
+    
+    ImGui::PopID();
+}
+
+void CodexPanel::render_key_value_map(const char* label, std::map<std::string, std::string>& map) {
+    ImGui::PushID(label);
+    
+    static char new_key[128] = "";
+    static char new_value[256] = "";
+    
+    ImGui::SetNextItemWidth(100);
+    ImGui::InputTextWithHint("##NewKey", "Key", new_key, sizeof(new_key));
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(150);
+    ImGui::InputTextWithHint("##NewValue", "Value", new_value, sizeof(new_value));
+    ImGui::SameLine();
+    if (ImGui::SmallButton("+")) {
+        if (new_key[0] != '\0') {
+            map[new_key] = new_value;
+            new_key[0] = '\0';
+            new_value[0] = '\0';
+            config_modified_ = true;
+        }
+    }
+    
+    std::vector<std::string> to_remove;
+    for (auto& [key, value] : map) {
+        ImGui::PushID(key.c_str());
+        
+        ImGui::Text("%s:", key.c_str());
+        ImGui::SameLine();
+        
+        char buf[256];
+        std::strncpy(buf, value.c_str(), sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        
+        ImGui::SetNextItemWidth(150);
+        if (ImGui::InputText("##Value", buf, sizeof(buf))) {
+            value = buf;
+            config_modified_ = true;
+        }
+        
+        ImGui::SameLine();
+        if (ImGui::SmallButton("X")) {
+            to_remove.push_back(key);
+        }
+        
+        ImGui::PopID();
+    }
+    
+    for (const auto& key : to_remove) {
+        map.erase(key);
+        config_modified_ = true;
+    }
+    
+    ImGui::PopID();
+}
+
+void CodexPanel::render_projects_section() {
+    ImGui::SetNextItemWidth(200);
+    ImGui::InputTextWithHint("##NewProject", "Project path", new_project_path_.data(), new_project_path_.size());
+    ImGui::SameLine();
+    if (ImGui::Button("Add Project")) {
+        if (new_project_path_[0] != '\0') {
+            std::string path = new_project_path_.data();
+            if (editing_config_.projects.find(path) == editing_config_.projects.end()) {
+                editing_config_.projects[path] = "untrusted";
+                config_modified_ = true;
+                status_message_ = "Added project: " + path;
+                status_time_ = 2.0f;
+            }
+            std::fill(new_project_path_.begin(), new_project_path_.end(), '\0');
+        }
+    }
+    
+    ImGui::Spacing();
+    ImGui::TextDisabled("Trust Levels: untrusted | trusted");
+    ImGui::Spacing();
+    
+    std::vector<std::string> to_remove;
+    for (auto& [path, trust_level] : editing_config_.projects) {
+        ImGui::PushID(path.c_str());
+        
+        ImGui::Text("%s", path.c_str());
+        
+        ImGui::SameLine();
+        ImGui::SetNextItemWidth(100);
+        
+        const char* trust_options[] = { "untrusted", "trusted" };
+        int current_idx = (trust_level == "trusted") ? 1 : 0;
+        
+        if (ImGui::Combo("##TrustLevel", &current_idx, trust_options, 2)) {
+            trust_level = trust_options[current_idx];
+            config_modified_ = true;
+        }
+        
+        ImGui::SameLine();
+        if (ImGui::SmallButton("X")) {
+            to_remove.push_back(path);
+        }
+        
+        ImGui::PopID();
+    }
+    
+    for (const auto& path : to_remove) {
+        editing_config_.projects.erase(path);
+        config_modified_ = true;
     }
 }
 

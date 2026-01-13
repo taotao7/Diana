@@ -29,6 +29,7 @@ private:
     void render_tui_section();
     void render_sandbox_section();
     void render_advanced_section();
+    void render_projects_section();
     
     void select_profile(const std::string& name);
     void create_new_profile();
@@ -37,6 +38,8 @@ private:
     void import_from_config();
     
     void render_string_list(const char* label, std::vector<std::string>& list);
+    void render_string_list_inline(const char* label, std::vector<std::string>& list);
+    void render_key_value_map(const char* label, std::map<std::string, std::string>& map);
     
     CodexProfileStore* profile_store_ = nullptr;
     
@@ -49,6 +52,7 @@ private:
     std::string new_profile_name_;
     std::string new_provider_id_;
     std::string new_mcp_id_;
+    std::string new_project_path_;
     
     std::string status_message_;
     float status_time_ = 0.0f;
