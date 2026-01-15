@@ -5,8 +5,13 @@
 #include <imgui.h>
 #include <nfd.h>
 #include <algorithm>
+#include <chrono>
 #include <cstdlib>
 #include <cmath>
+#include <cstdio>
+#include <filesystem>
+#include <optional>
+#include <sstream>
 
 extern "C" {
 #include <vterm_keycodes.h>
@@ -105,6 +110,73 @@ std::string build_cpr_reply(const CursorInfo& cursor) {
     int row = cursor.row + 1;
     int col = cursor.col + 1;
     return "\x1b[" + std::to_string(row) + ";" + std::to_string(col) + "R";
+}
+
+std::string escape_osascript_string(const std::string& value) {
+    std::string escaped;
+    escaped.reserve(value.size());
+    for (char c : value) {
+        if (c == '\\' || c == '"') {
+            escaped.push_back('\\');
+        }
+        escaped.push_back(c);
+    }
+    return escaped;
+}
+
+std::optional<std::string> read_clipboard_text_macos() {
+#if defined(__APPLE__)
+    const char* command = "osascript -e 'the clipboard as text' 2>/dev/null";
+    FILE* pipe = popen(command, "r");
+    if (!pipe) {
+        return std::nullopt;
+    }
+
+    std::string result;
+    char buffer[256];
+    while (fgets(buffer, sizeof(buffer), pipe)) {
+        result.append(buffer);
+    }
+    pclose(pipe);
+
+    while (!result.empty() && (result.back() == '\n' || result.back() == '\r')) {
+        result.pop_back();
+    }
+
+    if (!result.empty()) {
+        return result;
+    }
+#endif
+    return std::nullopt;
+}
+
+std::optional<std::string> write_clipboard_image_to_temp_file() {
+#if defined(__APPLE__)
+    namespace fs = std::filesystem;
+    auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+        std::chrono::system_clock::now().time_since_epoch()).count();
+    fs::path path = fs::temp_directory_path() / ("diana-clipboard-" + std::to_string(now) + ".png");
+    std::string escaped = escape_osascript_string(path.string());
+
+    std::ostringstream command;
+    command << "osascript -e 'set imageData to the clipboard as \"PNGf\"' "
+            << "-e 'set fileRef to open for access POSIX file \"" << escaped << "\" with write permission' "
+            << "-e 'set eof fileRef to 0' "
+            << "-e 'write imageData to fileRef' "
+            << "-e 'close access fileRef'";
+
+    int status = std::system(command.str().c_str());
+    if (status == 0) {
+        std::error_code ec;
+        if (fs::exists(path, ec) && !ec && fs::file_size(path, ec) > 0) {
+            return path.string();
+        }
+    }
+
+    std::error_code ec;
+    fs::remove(path, ec);
+#endif
+    return std::nullopt;
 }
 
 }
@@ -545,11 +617,48 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                 float scroll_y = ImGui::GetScrollY();
                 
                 const auto& scrollback = terminal.scrollback();
+                int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
+                
+                auto& selection = selections_[session.id()];
+                if (ImGui::IsWindowHovered()) {
+                    if (ImGui::IsMouseClicked(0)) {
+                        ImVec2 mouse_pos = ImGui::GetMousePos();
+                        ImVec2 rel_pos = ImVec2(mouse_pos.x - content_start.x, mouse_pos.y - content_start.y + scroll_y);
+                        
+                        int hover_col = static_cast<int>(rel_pos.x / char_size.x);
+                        int hover_line = static_cast<int>(rel_pos.y / line_height);
+                        
+                        hover_col = std::max(0, std::min(hover_col, terminal.cols() - 1));
+                        hover_line = std::max(0, std::min(hover_line, total_lines - 1));
+                        
+                        selection.active = true;
+                        selection.dragging = true;
+                        selection.start_row = hover_line;
+                        selection.start_col = hover_col;
+                        selection.end_row = hover_line;
+                        selection.end_col = hover_col;
+                    } else if (ImGui::IsMouseDragging(0) && selection.dragging) {
+                        ImVec2 mouse_pos = ImGui::GetMousePos();
+                        ImVec2 rel_pos = ImVec2(mouse_pos.x - content_start.x, mouse_pos.y - content_start.y + scroll_y);
+                        
+                        int hover_col = static_cast<int>(rel_pos.x / char_size.x);
+                        int hover_line = static_cast<int>(rel_pos.y / line_height);
+                        
+                        hover_col = std::max(0, std::min(hover_col, terminal.cols() - 1));
+                        hover_line = std::max(0, std::min(hover_line, total_lines - 1));
+                        
+                        selection.end_row = hover_line;
+                        selection.end_col = hover_col;
+                    }
+                }
+                
+                if (ImGui::IsMouseReleased(0)) {
+                    selection.dragging = false;
+                }
+                
                 bool has_scrollback = !scrollback.empty();
                 
                 if (has_scrollback) {
-                    int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
-                    
                     ImGuiListClipper clipper;
                     clipper.Begin(total_lines, line_height);
                     
@@ -559,10 +668,10 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                             
                             if (is_scrollback) {
                                 const auto& line = scrollback[static_cast<size_t>(line_idx)];
-                                render_terminal_line(line.data(), static_cast<int>(line.size()));
+                                render_terminal_line(line.data(), static_cast<int>(line.size()), line_height, line_idx, selection);
                             } else {
                                 int screen_row = line_idx - static_cast<int>(scrollback.size());
-                                render_screen_row(session, screen_row, line_height);
+                                render_screen_row(session, screen_row, line_height, line_idx, selection);
                             }
                         }
                     }
@@ -599,7 +708,7 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                     }
                 } else {
                     for (int row = 0; row < terminal.rows(); ++row) {
-                        render_screen_row(session, row, line_height);
+                        render_screen_row(session, row, line_height, row, selection);
                     }
                     
                     if (session.config().app == AppKind::Shell) {
@@ -740,7 +849,7 @@ void TerminalPanel::render_cursor(TerminalSession& session, float target_x, floa
     );
 }
 
-void TerminalPanel::render_screen_row(TerminalSession& session, int screen_row, float line_height) {
+void TerminalPanel::render_screen_row(TerminalSession& session, int screen_row, float line_height, int line_idx, const Selection& selection) {
     const auto& terminal = session.terminal();
     
     std::vector<TerminalCell> row_cells;
@@ -750,7 +859,7 @@ void TerminalPanel::render_screen_row(TerminalSession& session, int screen_row, 
         row_cells.push_back(terminal.get_cell(screen_row, col));
     }
     
-    render_terminal_line(row_cells.data(), static_cast<int>(row_cells.size()));
+    render_terminal_line(row_cells.data(), static_cast<int>(row_cells.size()), line_height, line_idx, selection);
 }
 
 static bool is_dark_color(uint32_t abgr) {
@@ -785,7 +894,7 @@ static uint32_t adjust_fg_for_light_theme(uint32_t fg, bool is_light_theme) {
     return r | (g << 8) | (b << 16) | (a << 24);
 }
 
-void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count) {
+void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count, float line_height, int line_idx, const Selection& selection) {
     if (count <= 0) {
         ImGui::NewLine();
         return;
@@ -798,6 +907,29 @@ void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count) {
     ImVec2 start_pos = ImGui::GetCursorScreenPos();
     ImVec2 char_size = ImGui::CalcTextSize("W");
     ImDrawList* draw_list = ImGui::GetWindowDrawList();
+    
+    int sel_min_col = -1;
+    int sel_max_col = -1;
+    
+    if (selection.active) {
+        int r1 = selection.start_row;
+        int c1 = selection.start_col;
+        int r2 = selection.end_row;
+        int c2 = selection.end_col;
+        
+        if (r1 > r2 || (r1 == r2 && c1 > c2)) {
+            std::swap(r1, r2);
+            std::swap(c1, c2);
+        }
+        
+        if (line_idx >= r1 && line_idx <= r2) {
+            if (line_idx == r1) sel_min_col = c1;
+            else sel_min_col = 0;
+            
+            if (line_idx == r2) sel_max_col = c2 + 1;
+            else sel_max_col = count;
+        }
+    }
     
     int col = 0;
     for (int i = 0; i < count; ++i) {
@@ -815,8 +947,15 @@ void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count) {
                              !is_dark_color(cell.bg);
         if (has_custom_bg) {
             ImVec2 bg_min(cell_x, start_pos.y);
-            ImVec2 bg_max(cell_x + cell_width_px, start_pos.y + char_size.y);
+            ImVec2 bg_max(cell_x + cell_width_px, start_pos.y + line_height);
             draw_list->AddRectFilled(bg_min, bg_max, cell.bg);
+        }
+        
+        if (i >= sel_min_col && i < sel_max_col) {
+            ImVec2 sel_min(cell_x, start_pos.y);
+            ImVec2 sel_max(cell_x + cell_width_px, start_pos.y + line_height);
+            uint32_t sel_color = is_light_theme ? 0x40000000 : 0x40FFFFFF;
+            draw_list->AddRectFilled(sel_min, sel_max, sel_color);
         }
         
         if (cell.chars[0] != 0 && cell.chars[0] != ' ' && cell.chars[0] <= 0x10FFFF) {
@@ -844,7 +983,7 @@ void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count) {
         col += cell.width;
     }
     
-    ImGui::Dummy(ImVec2(count * char_size.x, char_size.y));
+    ImGui::Dummy(ImVec2(count * char_size.x, line_height));
 }
 
 void TerminalPanel::render_input_line(TerminalSession& session) {
@@ -868,16 +1007,87 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
             if (!has_ime_input) {
                 bool paste_pressed = ImGui::IsKeyPressed(ImGuiKey_V) && (io.KeyCtrl || io.KeySuper);
                 if (paste_pressed) {
-                    if (const char* clip = ImGui::GetClipboardText(); clip && clip[0] != '\0') {
-                        controller_.send_paste(session, clip);
+                    if (write_clipboard_image_to_temp_file()) {
+                        controller_.send_raw_key(session, "\x16");
+                        handled_paste = true;
+                    } else {
+#if defined(__APPLE__)
+                        if (auto clip = read_clipboard_text_macos()) {
+                            controller_.send_paste(session, *clip);
+                            handled_paste = true;
+                        }
+#else
+                        if (const char* clip = ImGui::GetClipboardText(); clip && clip[0] != '\0') {
+                            controller_.send_paste(session, clip);
+                            handled_paste = true;
+                        }
+#endif
                     }
-                    handled_paste = true;
                 }
             }
             
             if (!handled_paste && ctrl_pressed && !has_ime_input) {
                 if (ImGui::IsKeyPressed(ImGuiKey_C)) {
-                    controller_.send_raw_key(session, "\x03");
+                    auto& selection = selections_[session.id()];
+                    if (selection.active) {
+                        std::string clipboard_text;
+                        const auto& terminal = session.terminal();
+                        const auto& scrollback = terminal.scrollback();
+                        int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
+                        
+                        int r1 = selection.start_row;
+                        int c1 = selection.start_col;
+                        int r2 = selection.end_row;
+                        int c2 = selection.end_col;
+                        
+                        if (r1 > r2 || (r1 == r2 && c1 > c2)) {
+                            std::swap(r1, r2);
+                            std::swap(c1, c2);
+                        }
+                        
+                        for (int r = r1; r <= r2; ++r) {
+                            if (r >= total_lines) break;
+                            
+                            int width = terminal.cols();
+                            const std::vector<TerminalCell>* sb_line = nullptr;
+                            
+                            if (r < static_cast<int>(scrollback.size())) {
+                                sb_line = &scrollback[r];
+                                width = static_cast<int>(sb_line->size());
+                            }
+                            
+                            int min_c = (r == r1) ? c1 : 0;
+                            int max_c = (r == r2) ? c2 : width - 1;
+                            
+                            if (min_c < 0) min_c = 0;
+                            if (max_c >= width) max_c = width - 1;
+                            
+                            for (int c = min_c; c <= max_c; ++c) {
+                                TerminalCell cell;
+                                if (sb_line) {
+                                    cell = (*sb_line)[c];
+                                } else {
+                                    cell = terminal.get_cell(r - static_cast<int>(scrollback.size()), c);
+                                }
+                                
+                                if (cell.width == 0) continue;
+                                
+                                std::string utf8;
+                                cell_to_utf8(cell.chars, utf8);
+                                clipboard_text += utf8;
+                            }
+                            
+                            if (r < r2) {
+                                clipboard_text += '\n';
+                            }
+                        }
+                        
+                        if (!clipboard_text.empty()) {
+                            ImGui::SetClipboardText(clipboard_text.c_str());
+                        }
+                    } else {
+                        controller_.send_raw_key(session, "\x03");
+                    }
                 }
                 else if (ImGui::IsKeyPressed(ImGuiKey_D)) {
                     controller_.send_raw_key(session, "\x04");

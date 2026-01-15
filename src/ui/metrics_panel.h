@@ -1,8 +1,8 @@
 #pragma once
 
-#include "metrics/metrics_store.h"
 #include "metrics/multi_metrics_store.h"
 #include "metrics/claude_usage_collector.h"
+#include "metrics/codex_usage_collector.h"
 #include "metrics/opencode_usage_collector.h"
 #include "terminal/terminal_panel.h"
 #include <memory>
@@ -29,6 +29,7 @@ private:
     
     std::unique_ptr<MultiMetricsStore> hub_;
     std::unique_ptr<ClaudeUsageCollector> claude_collector_;
+    std::unique_ptr<CodexUsageCollector> codex_collector_;
     std::unique_ptr<OpencodeUsageCollector> opencode_collector_;
     
     TerminalPanel* terminal_panel_ = nullptr;

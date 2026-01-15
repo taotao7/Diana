@@ -52,11 +52,20 @@ public:
     SessionController& controller() { return controller_; }
 
 private:
+    struct Selection {
+        bool active = false;
+        bool dragging = false;
+        int start_row = 0;
+        int start_col = 0;
+        int end_row = 0;
+        int end_col = 0;
+    };
+
     void render_control_bar(TerminalSession& session);
     void render_output_area(TerminalSession& session);
     void render_input_line(TerminalSession& session);
-    void render_terminal_line(const TerminalCell* cells, int count);
-    void render_screen_row(TerminalSession& session, int screen_row, float line_height);
+    void render_terminal_line(const TerminalCell* cells, int count, float line_height, int line_idx, const Selection& selection);
+    void render_screen_row(TerminalSession& session, int screen_row, float line_height, int line_idx, const Selection& selection);
     void render_cursor(TerminalSession& session, float target_x, float target_y, float char_w, float char_h, int cell_width);
     void render_banner();
     void handle_start_stop(TerminalSession& session);
@@ -75,6 +84,7 @@ private:
     
     std::unordered_map<uint32_t, CursorAnimation> cursor_animations_;
     std::unordered_map<uint32_t, std::string> cpr_buffers_;
+    std::unordered_map<uint32_t, Selection> selections_;
     
     SessionConfigStore config_store_;
 };

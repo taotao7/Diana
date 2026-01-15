@@ -178,6 +178,7 @@ add_executable(diana
     src/metrics/metrics_store.cpp
     src/metrics/multi_metrics_store.cpp
     src/metrics/claude_usage_collector.cpp
+    src/metrics/codex_usage_collector.cpp
     src/metrics/opencode_usage_collector.cpp
     src/metrics/agent_token_store.cpp
  )

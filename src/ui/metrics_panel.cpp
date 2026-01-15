@@ -1,7 +1,7 @@
 #include "metrics_panel.h"
+#include "ui/metrics_panel.h"
 #include "imgui.h"
 #include "implot.h"
-#include <algorithm>
 #include <array>
 #include <cstdlib>
 
@@ -10,14 +10,17 @@ namespace diana {
 MetricsPanel::MetricsPanel()
     : hub_(std::make_unique<MultiMetricsStore>())
     , claude_collector_(std::make_unique<ClaudeUsageCollector>())
+    , codex_collector_(std::make_unique<CodexUsageCollector>())
     , opencode_collector_(std::make_unique<OpencodeUsageCollector>())
 {
     claude_collector_->set_multi_store(hub_.get());
+    codex_collector_->set_multi_store(hub_.get());
     opencode_collector_->set_multi_store(hub_.get());
 }
 
 void MetricsPanel::update() {
     claude_collector_->poll();
+    codex_collector_->poll();
     opencode_collector_->poll();
 }
 
@@ -152,6 +155,9 @@ void MetricsPanel::render_active_section() {
     if (app == AppKind::ClaudeCode) {
         files = claude_collector_->files_processed();
         entries = claude_collector_->entries_parsed();
+    } else if (app == AppKind::Codex) {
+        files = codex_collector_->files_processed();
+        entries = codex_collector_->entries_parsed();
     } else if (app == AppKind::OpenCode) {
         files = opencode_collector_->files_processed();
         entries = opencode_collector_->entries_parsed();
@@ -248,7 +254,9 @@ std::string MetricsPanel::get_project_key(AppKind app, const std::string& workin
         result = result.substr(1);
     }
 
-    if (app == AppKind::OpenCode) {
+    if (app == AppKind::Codex) {
+        result = "codex:" + result;
+    } else if (app == AppKind::OpenCode) {
         result = "opencode:" + result;
     }
     return result;
