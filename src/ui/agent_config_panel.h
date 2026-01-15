@@ -8,7 +8,7 @@ namespace diana {
 
 class AgentConfigPanel {
 public:
-    void render();
+    void render(bool* is_open);
     
     void set_claude_panel(ClaudeCodePanel* panel) { claude_panel_ = panel; }
     void set_opencode_panel(OpenCodePanel* panel) { opencode_panel_ = panel; }
@@ -20,5 +20,6 @@ private:
     CodexPanel* codex_panel_ = nullptr;
     int active_tab_ = 0;
 };
+
 
 }

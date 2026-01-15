@@ -2,8 +2,6 @@
 #include "app/dockspace.h"
 #include "ui/agent_token_panel.h"
 
-#include "imgui.h"
-
 namespace diana {
 
 void AppShell::init() {
@@ -37,13 +35,27 @@ void AppShell::init() {
 }
 
 void AppShell::render() {
-    render_dockspace(first_frame_);
+    DockspacePanels panels{
+        &show_terminal_,
+        &show_agent_config_,
+        &show_token_metrics_,
+        &show_agent_token_stats_
+    };
+    render_dockspace(first_frame_, panels);
     first_frame_ = false;
 
-    terminal_panel_->render();
-    metrics_panel_->render();
-    agent_config_panel_->render();
-    agent_token_panel_->render();
+    if (show_terminal_) {
+        terminal_panel_->render();
+    }
+    if (show_token_metrics_) {
+        metrics_panel_->render();
+    }
+    if (show_agent_config_) {
+        agent_config_panel_->render(&show_agent_config_);
+    }
+    if (show_agent_token_stats_) {
+        agent_token_panel_->render();
+    }
 }
 
 void AppShell::shutdown() {

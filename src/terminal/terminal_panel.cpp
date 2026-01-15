@@ -1002,6 +1002,7 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
             }
             
             bool ctrl_pressed = diana_is_ctrl_pressed();
+            bool cmd_pressed = io.KeySuper;
             bool handled_paste = false;
             
             if (!has_ime_input) {
@@ -1026,8 +1027,8 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                 }
             }
             
-            if (!handled_paste && ctrl_pressed && !has_ime_input) {
-                if (ImGui::IsKeyPressed(ImGuiKey_C)) {
+            if (!handled_paste && !has_ime_input) {
+                if (ImGui::IsKeyPressed(ImGuiKey_C) && (ctrl_pressed || cmd_pressed)) {
                     auto& selection = selections_[session.id()];
                     if (selection.active) {
                         std::string clipboard_text;
@@ -1085,77 +1086,77 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                         if (!clipboard_text.empty()) {
                             ImGui::SetClipboardText(clipboard_text.c_str());
                         }
-                    } else {
+                    } else if (ctrl_pressed) {
                         controller_.send_raw_key(session, "\x03");
                     }
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_D)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_D)) {
                     controller_.send_raw_key(session, "\x04");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_Z)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Z)) {
                     controller_.send_raw_key(session, "\x1a");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_L)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_L)) {
                     controller_.send_raw_key(session, "\x0c");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_U)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_U)) {
                     controller_.send_raw_key(session, "\x15");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_W)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_W)) {
                     controller_.send_raw_key(session, "\x17");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_A)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_A)) {
                     controller_.send_raw_key(session, "\x01");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_E)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_E)) {
                     controller_.send_raw_key(session, "\x05");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_K)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_K)) {
                     controller_.send_raw_key(session, "\x0b");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_R)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_R)) {
                     controller_.send_raw_key(session, "\x12");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_P)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_P)) {
                     controller_.send_raw_key(session, "\x10");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_N)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_N)) {
                     controller_.send_raw_key(session, "\x0e");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_B)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_B)) {
                     controller_.send_raw_key(session, "\x02");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_F)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_F)) {
                     controller_.send_raw_key(session, "\x06");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_T)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_T)) {
                     controller_.send_raw_key(session, "\x14");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_Y)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Y)) {
                     controller_.send_raw_key(session, "\x19");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_H)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_H)) {
                     controller_.send_raw_key(session, "\x08");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_J)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_J)) {
                     controller_.send_raw_key(session, "\x0a");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_O)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_O)) {
                     controller_.send_raw_key(session, "\x0f");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_G)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_G)) {
                     controller_.send_raw_key(session, "\x07");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_Backslash)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Backslash)) {
                     controller_.send_raw_key(session, "\x1c");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_LeftBracket)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_LeftBracket)) {
                     controller_.send_raw_key(session, "\x1b");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_RightBracket)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_RightBracket)) {
                     controller_.send_raw_key(session, "\x1d");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_Minus)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Minus)) {
                     controller_.send_raw_key(session, "\x1f");
                 }
             }
@@ -1167,43 +1168,43 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                         controller_.send_key(session, VTERM_KEY_ENTER);
                     }
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                     controller_.send_key(session, VTERM_KEY_ESCAPE);
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
                     controller_.send_key(session, VTERM_KEY_BACKSPACE);
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_Tab) && io.KeyShift) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Tab) && io.KeyShift) {
                     controller_.send_raw_key(session, "\x1b[Z");
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_Tab)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Tab)) {
                     controller_.send_key(session, VTERM_KEY_TAB);
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
                     controller_.send_key(session, VTERM_KEY_UP);
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
                     controller_.send_key(session, VTERM_KEY_DOWN);
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
                     controller_.send_key(session, VTERM_KEY_RIGHT);
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
                     controller_.send_key(session, VTERM_KEY_LEFT);
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
                     controller_.send_key(session, VTERM_KEY_DEL);
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Home)) {
                     controller_.send_key(session, VTERM_KEY_HOME);
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_End)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_End)) {
                     controller_.send_key(session, VTERM_KEY_END);
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
                     controller_.send_key(session, VTERM_KEY_PAGEUP);
                 }
-                else if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
+                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
                     controller_.send_key(session, VTERM_KEY_PAGEDOWN);
                 }
             }

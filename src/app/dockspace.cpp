@@ -1,4 +1,5 @@
 #include "app/dockspace.h"
+#include "app/dockspace.h"
 #include "ui/theme.h"
 
 #include "imgui.h"
@@ -96,7 +97,7 @@ static void render_about_dialog() {
     }
 }
 
-void render_dockspace(bool first_frame) {
+void render_dockspace(bool first_frame, const DockspacePanels& panels) {
     static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
 
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
@@ -160,10 +161,18 @@ void render_dockspace(bool first_frame) {
             ImGui::EndMenu();
         }
         if (ImGui::BeginMenu("View")) {
-            if (ImGui::MenuItem("Terminal", "Ctrl+1")) {}
-            if (ImGui::MenuItem("Agent Config", "Ctrl+2")) {}
-            if (ImGui::MenuItem("Token Metrics", "Ctrl+3")) {}
-            if (ImGui::MenuItem("Agent Token Stats", "Ctrl+4")) {}
+            if (panels.show_terminal) {
+                ImGui::MenuItem("Terminal", "Ctrl+1", panels.show_terminal);
+            }
+            if (panels.show_agent_config) {
+                ImGui::MenuItem("Agent Config", "Ctrl+2", panels.show_agent_config);
+            }
+            if (panels.show_token_metrics) {
+                ImGui::MenuItem("Token Metrics", "Ctrl+3", panels.show_token_metrics);
+            }
+            if (panels.show_agent_token_stats) {
+                ImGui::MenuItem("Agent Token Stats", "Ctrl+4", panels.show_agent_token_stats);
+            }
             ImGui::Separator();
             if (ImGui::BeginMenu("Theme")) {
                 ThemeMode mode = get_theme_mode();
@@ -195,6 +204,21 @@ void render_dockspace(bool first_frame) {
             ImGui::EndMenu();
         }
         ImGui::EndMenuBar();
+    }
+
+    if (!io.WantTextInput && (io.KeyCtrl || io.KeySuper)) {
+        if (panels.show_terminal && ImGui::IsKeyPressed(ImGuiKey_1)) {
+            *panels.show_terminal = !*panels.show_terminal;
+        }
+        if (panels.show_agent_config && ImGui::IsKeyPressed(ImGuiKey_2)) {
+            *panels.show_agent_config = !*panels.show_agent_config;
+        }
+        if (panels.show_token_metrics && ImGui::IsKeyPressed(ImGuiKey_3)) {
+            *panels.show_token_metrics = !*panels.show_token_metrics;
+        }
+        if (panels.show_agent_token_stats && ImGui::IsKeyPressed(ImGuiKey_4)) {
+            *panels.show_agent_token_stats = !*panels.show_agent_token_stats;
+        }
     }
     
     render_about_dialog();

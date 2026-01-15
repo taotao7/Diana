@@ -33,6 +33,10 @@ public:
 
 private:
     bool first_frame_ = true;
+    bool show_terminal_ = true;
+    bool show_agent_config_ = true;
+    bool show_token_metrics_ = true;
+    bool show_agent_token_stats_ = true;
     std::unique_ptr<TerminalPanel> terminal_panel_;
     std::unique_ptr<MetricsPanel> metrics_panel_;
     std::unique_ptr<ClaudeCodePanel> claude_code_panel_;
