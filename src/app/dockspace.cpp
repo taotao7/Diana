@@ -1,11 +1,15 @@
 #include "app/dockspace.h"
 #include "app/dockspace.h"
+#include "adapters/config_exporter.h"
+#include "adapters/config_manager.h"
 #include "ui/theme.h"
 
 #include "imgui.h"
 #include "imgui_internal.h"
 
+#include <nfd.h>
 #include <cstdlib>
+#include <vector>
 
 #ifndef DIANA_VERSION
 #define DIANA_VERSION "0.1.0"
@@ -16,6 +20,21 @@ extern "C" void diana_request_exit();
 namespace diana {
 
 static bool show_about_dialog = false;
+
+static std::vector<ExportedConfig> collect_export_configs(ConfigManager& manager) {
+    std::vector<ExportedConfig> configs;
+    for (AppKind kind : {AppKind::ClaudeCode, AppKind::Codex, AppKind::OpenCode}) {
+        auto current = manager.read_config(kind);
+        if (!current) {
+            continue;
+        }
+        ExportedConfig exported;
+        exported.app_name = ConfigExporter::app_kind_to_string(kind);
+        exported.config = current->active;
+        configs.push_back(exported);
+    }
+    return configs;
+}
 
 static void open_url(const char* url) {
 #if defined(__APPLE__)
@@ -99,6 +118,11 @@ static void render_about_dialog() {
 
 void render_dockspace(bool first_frame, const DockspacePanels& panels) {
     static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_None;
+    static ConfigManager config_manager;
+    static std::string pending_import_path;
+    static bool show_import_confirmation = false;
+    static bool show_import_result = false;
+    static bool import_success = false;
 
     ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
 
@@ -152,8 +176,26 @@ void render_dockspace(bool first_frame, const DockspacePanels& panels) {
 
     if (ImGui::BeginMenuBar()) {
         if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("Import Config...", "Ctrl+I")) {}
-            if (ImGui::MenuItem("Export Config...", "Ctrl+E")) {}
+            const nfdfilteritem_t filter_items[1] = {{"JSON", "json"}};
+            if (ImGui::MenuItem("Import Config...", "Ctrl+I")) {
+                nfdchar_t* out_path = nullptr;
+                nfdresult_t result = NFD_OpenDialog(&out_path, filter_items, 1, nullptr);
+                if (result == NFD_OKAY && out_path) {
+                    pending_import_path = std::string(out_path);
+                    show_import_confirmation = true;
+                    NFD_FreePath(out_path);
+                }
+            }
+            if (ImGui::MenuItem("Export Config...", "Ctrl+E")) {
+                nfdchar_t* out_path = nullptr;
+                nfdresult_t result = NFD_SaveDialog(&out_path, filter_items, 1, nullptr, "diana-config.json");
+                if (result == NFD_OKAY && out_path) {
+                    auto configs = collect_export_configs(config_manager);
+                    auto diana_files = ConfigExporter::collect_diana_config_files();
+                    ConfigExporter::export_to_file(out_path, configs, diana_files);
+                    NFD_FreePath(out_path);
+                }
+            }
             ImGui::Separator();
 #if !defined(__APPLE__)
             if (ImGui::MenuItem("Exit", "Alt+F4")) { diana_request_exit(); }
@@ -204,6 +246,88 @@ void render_dockspace(bool first_frame, const DockspacePanels& panels) {
             ImGui::EndMenu();
         }
         ImGui::EndMenuBar();
+    }
+
+    if (show_import_confirmation) {
+        ImGui::OpenPopup("Confirm Import");
+    }
+
+    if (ImGui::BeginPopupModal("Confirm Import", &show_import_confirmation, ImGuiWindowFlags_AlwaysAutoResize)) {
+        ImGui::TextColored(ImVec4(1.0f, 0.6f, 0.0f, 1.0f), "Warning: Overwriting Configuration");
+        ImGui::Spacing();
+        ImGui::TextWrapped("Importing this bundle will overwrite existing configuration files in:");
+        ImGui::Spacing();
+        ImGui::TextDisabled("~/.config/diana");
+        ImGui::Spacing();
+        ImGui::TextWrapped("This action cannot be undone. Continue?");
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        if (ImGui::Button("Cancel", ImVec2(120, 0))) {
+            show_import_confirmation = false;
+            pending_import_path.clear();
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::SameLine();
+
+        if (ImGui::Button("Import", ImVec2(120, 0))) {
+            import_success = false;
+            if (!pending_import_path.empty()) {
+                auto bundle = ConfigExporter::import_from_file(pending_import_path);
+                if (bundle) {
+                    bool restore_ok = true;
+                    if (!bundle->diana_files.empty()) {
+                        restore_ok = ConfigExporter::restore_diana_config_files(bundle->diana_files);
+                    }
+                    if (restore_ok) {
+                        for (const auto& cfg : bundle->configs) {
+                            auto kind = ConfigExporter::string_to_app_kind(cfg.app_name);
+                            if (kind) {
+                                config_manager.switch_config(*kind, cfg.config);
+                            }
+                        }
+                        import_success = true;
+                    }
+                }
+            }
+            show_import_confirmation = false;
+            pending_import_path.clear();
+            ImGui::CloseCurrentPopup();
+            show_import_result = true;
+        }
+
+        ImGui::EndPopup();
+    }
+
+    if (show_import_result) {
+        ImGui::OpenPopup("Import Result");
+    }
+
+    if (ImGui::BeginPopupModal("Import Result", &show_import_result, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (import_success) {
+            ImGui::TextColored(ImVec4(0.2f, 0.8f, 0.2f, 1.0f), "Import Successful");
+            ImGui::Spacing();
+            ImGui::Text("Configuration imported successfully.");
+        } else {
+            ImGui::TextColored(ImVec4(1.0f, 0.4f, 0.4f, 1.0f), "Import Failed");
+            ImGui::Spacing();
+            ImGui::Text("Failed to load configuration bundle.");
+        }
+
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+
+        float button_width = 120.0f;
+        ImGui::SetCursorPosX((ImGui::GetWindowWidth() - button_width) * 0.5f);
+        if (ImGui::Button("OK", ImVec2(button_width, 0))) {
+            show_import_result = false;
+            ImGui::CloseCurrentPopup();
+        }
+
+        ImGui::EndPopup();
     }
 
     if (!io.WantTextInput && (io.KeyCtrl || io.KeySuper)) {
