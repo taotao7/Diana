@@ -41,6 +41,14 @@ void AgentConfigPanel::render(bool* is_open) {
             ImGui::EndTabItem();
         }
 
+        if (ImGui::BeginTabItem("Marketplace")) {
+            active_tab_ = 3;
+            if (marketplace_panel_) {
+                marketplace_panel_->render_content();
+            }
+            ImGui::EndTabItem();
+        }
+
         ImGui::EndTabBar();
     }
 

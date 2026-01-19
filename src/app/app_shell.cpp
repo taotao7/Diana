@@ -1,6 +1,7 @@
 #include "app/app_shell.h"
 #include "app/dockspace.h"
 #include "ui/agent_token_panel.h"
+#include <filesystem>
 
 namespace diana {
 
@@ -22,6 +23,7 @@ void AppShell::init() {
     claude_code_panel_ = std::make_unique<ClaudeCodePanel>();
     opencode_panel_ = std::make_unique<OpenCodePanel>();
     codex_panel_ = std::make_unique<CodexPanel>();
+    marketplace_panel_ = std::make_unique<MarketplacePanel>();
     agent_config_panel_ = std::make_unique<AgentConfigPanel>();
     agent_token_panel_ = std::make_unique<AgentTokenPanel>();
     
@@ -31,6 +33,8 @@ void AppShell::init() {
     agent_config_panel_->set_claude_panel(claude_code_panel_.get());
     agent_config_panel_->set_opencode_panel(opencode_panel_.get());
     agent_config_panel_->set_codex_panel(codex_panel_.get());
+    agent_config_panel_->set_marketplace_panel(marketplace_panel_.get());
+    marketplace_panel_->set_project_directory(std::filesystem::current_path().string());
     metrics_panel_->set_terminal_panel(terminal_panel_.get());
 }
 

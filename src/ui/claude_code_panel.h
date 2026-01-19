@@ -3,6 +3,7 @@
 #include "adapters/claude_profile_store.h"
 #include <imgui.h>
 #include <array>
+#include <vector>
 
 namespace diana {
 

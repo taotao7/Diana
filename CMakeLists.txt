@@ -165,6 +165,7 @@ add_executable(diana
     src/adapters/codex_config.cpp
     src/adapters/codex_profile_store.cpp
     src/adapters/opencode_config.cpp
+    src/adapters/marketplace_settings.cpp
     src/adapters/opencode_profile_store.cpp
     src/adapters/session_config_store.cpp
     src/ui/metrics_panel.cpp
@@ -174,6 +175,8 @@ add_executable(diana
     src/ui/agent_config_panel.cpp
     src/ui/agent_token_panel.cpp
     src/ui/theme.cpp
+    src/marketplace/marketplace_client.cpp
+    src/marketplace/marketplace_panel.cpp
     $<$<PLATFORM_ID:Darwin>:src/ui/theme_macos.mm>
     src/metrics/metrics_store.cpp
     src/metrics/multi_metrics_store.cpp
