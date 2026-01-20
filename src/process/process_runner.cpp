@@ -118,6 +118,10 @@ bool ProcessRunner::start(const ProcessConfig& config) {
     if (running_.load()) {
         return false;
     }
+
+    if (io_thread_.joinable()) {
+        io_thread_.join();
+    }
     
     struct winsize ws;
     ws.ws_col = static_cast<unsigned short>(config.cols);

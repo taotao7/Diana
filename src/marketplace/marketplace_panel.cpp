@@ -6,8 +6,11 @@
 #include <toml++/toml.hpp>
 #include <array>
 #include <cstdio>
-#include <thread>
 #include <mutex>
+#include <algorithm>
+#include "terminal/vterminal.h"
+#include "ui/theme.h"
+#include <nfd.h>
 
 namespace diana {
 
@@ -22,9 +25,181 @@ static void RenderSplitter(const char* id, float* width_ptr, float min_width) {
     }
 }
 
+static McpConnectionConfig parse_mcp_config(const nlohmann::json& j) {
+    McpConnectionConfig config;
+    if (!j.is_object()) {
+        return config;
+    }
+    if (j.contains("type") && j["type"].is_string()) {
+        config.type = j["type"].get<std::string>();
+    }
+    if (j.contains("url") && j["url"].is_string()) {
+        config.url = j["url"].get<std::string>();
+    }
+    if (j.contains("command") && j["command"].is_string()) {
+        config.command = j["command"].get<std::string>();
+    }
+    if (j.contains("args") && j["args"].is_array()) {
+        for (const auto& arg : j["args"]) {
+            if (arg.is_string()) {
+                config.args.push_back(arg.get<std::string>());
+            }
+        }
+    }
+    if (j.contains("env") && j["env"].is_object()) {
+        for (const auto& [key, value] : j["env"].items()) {
+            if (value.is_string()) {
+                config.env[key] = value.get<std::string>();
+            }
+        }
+    }
+    if (j.contains("headers") && j["headers"].is_object()) {
+        for (const auto& [key, value] : j["headers"].items()) {
+            if (value.is_string()) {
+                config.headers[key] = value.get<std::string>();
+            }
+        }
+    }
+    return config;
+}
+
+static std::string strip_ansi_sequences(const std::string& input) {
+    std::string out;
+    out.reserve(input.size());
+    for (size_t i = 0; i < input.size(); ++i) {
+        unsigned char c = static_cast<unsigned char>(input[i]);
+        if (c == 0x1b) {
+            if (i + 1 >= input.size()) {
+                break;
+            }
+            char next = input[i + 1];
+            if (next == '[') {
+                i += 2;
+                while (i < input.size()) {
+                    char ch = input[i];
+                    if ((ch >= '@' && ch <= '~')) {
+                        break;
+                    }
+                    ++i;
+                }
+                continue;
+            }
+            if (next == ']') {
+                i += 2;
+                while (i < input.size()) {
+                    char ch = input[i];
+                    if (ch == '\\') {
+                        break;
+                    }
+                    if (ch == '\a') {
+                        break;
+                    }
+                    ++i;
+                }
+                continue;
+            }
+            continue;
+        }
+        if (c < 0x20 && c != '\n' && c != '\r' && c != '\t') {
+            continue;
+        }
+        out.push_back(static_cast<char>(c));
+    }
+    return out;
+}
+
+static void utf8_encode(uint32_t codepoint, char* out, int* len) {
+    if (codepoint <= 0x7F) {
+        out[0] = static_cast<char>(codepoint);
+        *len = 1;
+    } else if (codepoint <= 0x7FF) {
+        out[0] = static_cast<char>(0xC0 | (codepoint >> 6));
+        out[1] = static_cast<char>(0x80 | (codepoint & 0x3F));
+        *len = 2;
+    } else if (codepoint <= 0xFFFF) {
+        out[0] = static_cast<char>(0xE0 | (codepoint >> 12));
+        out[1] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+        out[2] = static_cast<char>(0x80 | (codepoint & 0x3F));
+        *len = 3;
+    } else {
+        out[0] = static_cast<char>(0xF0 | (codepoint >> 18));
+        out[1] = static_cast<char>(0x80 | ((codepoint >> 12) & 0x3F));
+        out[2] = static_cast<char>(0x80 | ((codepoint >> 6) & 0x3F));
+        out[3] = static_cast<char>(0x80 | (codepoint & 0x3F));
+        *len = 4;
+    }
+}
+
+static void cell_to_utf8(const uint32_t* chars, std::string& out) {
+    char utf8[8];
+    int len = 0;
+    for (int j = 0; j < TERMINAL_MAX_CHARS_PER_CELL; ++j) {
+        uint32_t cp = chars[j];
+        if (cp == 0) break;
+        utf8_encode(cp, utf8, &len);
+        out.append(utf8, utf8 + len);
+    }
+}
+
+static bool is_light_color(uint32_t abgr) {
+    uint8_t r = abgr & 0xFF;
+    uint8_t g = (abgr >> 8) & 0xFF;
+    uint8_t b = (abgr >> 16) & 0xFF;
+    int brightness = (r * 299 + g * 587 + b * 114) / 1000;
+    return brightness > 180;
+}
+
+static uint32_t adjust_fg_for_light_theme(uint32_t fg, bool is_light_theme) {
+    if (!is_light_theme) return fg;
+    if (!is_light_color(fg)) return fg;
+    uint8_t r = fg & 0xFF;
+    uint8_t g = (fg >> 8) & 0xFF;
+    uint8_t b = (fg >> 16) & 0xFF;
+    uint8_t a = (fg >> 24) & 0xFF;
+    r = static_cast<uint8_t>(r * 0.4f);
+    g = static_cast<uint8_t>(g * 0.4f);
+    b = static_cast<uint8_t>(b * 0.4f);
+    return r | (g << 8) | (b << 16) | (a << 24);
+}
+
+static void render_terminal_line(const TerminalCell* cells, int count, float line_height, ImDrawList* draw_list, const ImVec2& start_pos, float char_w, bool is_light_theme) {
+    float cell_x = start_pos.x;
+    for (int col = 0; col < count; ++col) {
+        const TerminalCell& cell = cells[col];
+        if (cell.width == 0) continue;
+
+        if (cell.chars[0] != 0 && cell.chars[0] != ' ' && cell.chars[0] <= 0x10FFFF) {
+            char utf8_buf[32];
+            int utf8_len = 0;
+            for (int j = 0; j < TERMINAL_MAX_CHARS_PER_CELL && cell.chars[j] != 0; ++j) {
+                uint32_t cp = cell.chars[j];
+                if (cp > 0x10FFFF) break;
+                char tmp[8];
+                int len;
+                utf8_encode(cp, tmp, &len);
+                if (utf8_len + len < 31) {
+                    memcpy(utf8_buf + utf8_len, tmp, static_cast<size_t>(len));
+                    utf8_len += len;
+                }
+            }
+            utf8_buf[utf8_len] = '\0';
+
+            if (utf8_len > 0) {
+                uint32_t fg = adjust_fg_for_light_theme(cell.fg, is_light_theme);
+                draw_list->AddText(ImVec2(cell_x, start_pos.y), fg, utf8_buf);
+            }
+        }
+
+        cell_x += cell.width * char_w;
+    }
+
+    ImGui::Dummy(ImVec2(count * char_w, line_height));
+}
+
 MarketplacePanel::MarketplacePanel() {
     search_buffer_.resize(256, '\0');
     api_key_buffer_.resize(256, '\0');
+    install_terminal_ = std::make_unique<VTerminal>(24, 80);
     
     auto settings = settings_store_.load();
     if (!settings.smithery_api_key.empty()) {
@@ -71,6 +246,9 @@ void MarketplacePanel::render_content() {
     if (ImGui::BeginTabBar("MarketplaceTabs")) {
         if (ImGui::BeginTabItem("MCP")) {
             marketplace_tab_ = 0;
+            if (last_marketplace_tab_ != marketplace_tab_) {
+                focus_search_input_ = true;
+            }
             render_search_bar();
             
             float avail_width = ImGui::GetContentRegionAvail().x;
@@ -88,7 +266,11 @@ void MarketplacePanel::render_content() {
             float list_width = avail_width - mcp_detail_width_ - splitter_width - (spacing * 2.0f);
             
             ImGui::BeginChild("ServerList", ImVec2(list_width, 0), true);
-            render_server_list();
+            if (show_installed_mcp_) {
+                render_installed_mcp_list();
+            } else {
+                render_server_list();
+            }
             ImGui::EndChild();
             
             ImGui::SameLine();
@@ -96,7 +278,11 @@ void MarketplacePanel::render_content() {
             ImGui::SameLine();
             
             ImGui::BeginChild("ServerDetail", ImVec2(mcp_detail_width_, 0), true);
-            render_server_detail();
+            if (show_installed_mcp_) {
+                render_installed_mcp_detail();
+            } else {
+                render_server_detail();
+            }
             ImGui::EndChild();
             
             ImGui::EndTabItem();
@@ -104,6 +290,9 @@ void MarketplacePanel::render_content() {
         
         if (ImGui::BeginTabItem("Skills")) {
             marketplace_tab_ = 1;
+            if (last_marketplace_tab_ != marketplace_tab_) {
+                focus_search_input_ = true;
+            }
             render_search_bar();
             
             float avail_width = ImGui::GetContentRegionAvail().x;
@@ -121,7 +310,11 @@ void MarketplacePanel::render_content() {
             float list_width = avail_width - skill_detail_width_ - splitter_width - (spacing * 2.0f);
             
             ImGui::BeginChild("SkillList", ImVec2(list_width, 0), true);
-            render_skill_list();
+            if (show_installed_skills_) {
+                render_installed_skill_list();
+            } else {
+                render_skill_list();
+            }
             ImGui::EndChild();
             
             ImGui::SameLine();
@@ -129,7 +322,11 @@ void MarketplacePanel::render_content() {
             ImGui::SameLine();
             
             ImGui::BeginChild("SkillDetail", ImVec2(skill_detail_width_, 0), true);
-            render_skill_detail();
+            if (show_installed_skills_) {
+                render_installed_skill_detail();
+            } else {
+                render_skill_detail();
+            }
             ImGui::EndChild();
             
             ImGui::EndTabItem();
@@ -137,16 +334,23 @@ void MarketplacePanel::render_content() {
         
         ImGui::EndTabBar();
     }
+
+    last_marketplace_tab_ = marketplace_tab_;
     
     render_install_popup();
 }
 
 void MarketplacePanel::render_search_bar() {
     const bool is_mcp = marketplace_tab_ == 0;
+    ImGui::PushID(is_mcp ? "mcp_search" : "skill_search");
     ImGui::Text(is_mcp ? "Search MCP Servers:" : "Search Skills:");
     ImGui::SameLine();
     
     ImGui::SetNextItemWidth(300);
+    if (focus_search_input_ && (!show_installed_mcp_ && !show_installed_skills_)) {
+        ImGui::SetKeyboardFocusHere();
+        focus_search_input_ = false;
+    }
     bool enter_pressed = ImGui::InputTextWithHint(
         "##Search", 
         is_mcp ? "e.g. github, notion, exa..." : "e.g. summarizer, reviewer...", 
@@ -178,6 +382,23 @@ void MarketplacePanel::render_search_bar() {
             do_skill_search(1);
         }
     }
+
+    ImGui::SameLine();
+    bool show_installed = is_mcp ? show_installed_mcp_ : show_installed_skills_;
+    const char* toggle_label = show_installed ? "Marketplace" : "Installed";
+    if (ImGui::Button(toggle_label)) {
+        if (is_mcp) {
+            show_installed_mcp_ = !show_installed_mcp_;
+            if (show_installed_mcp_) {
+                refresh_installed_mcp();
+            }
+        } else {
+            show_installed_skills_ = !show_installed_skills_;
+            if (show_installed_skills_) {
+                refresh_installed_skills();
+            }
+        }
+    }
     
     
     if (list_state_ == FetchState::Loading || detail_state_ == FetchState::Loading) {
@@ -204,6 +425,7 @@ void MarketplacePanel::render_search_bar() {
     if (ImGui::IsItemHovered()) {
         ImGui::SetTooltip("Open https://smithery.ai/account/api-keys");
     }
+    ImGui::PopID();
 }
 
 void MarketplacePanel::render_server_list() {
@@ -307,15 +529,7 @@ void MarketplacePanel::render_server_detail() {
     
     ImGui::Spacing();
     ImGui::Separator();
-    std::string cli_log;
-    {
-        std::lock_guard<std::mutex> lock(install_mutex_);
-        cli_log = cli_log_;
-    }
-    ImGui::Text("Smithery CLI Output:");
-    ImGui::BeginChild("SmitheryCliLog", ImVec2(0, 80), true, ImGuiWindowFlags_HorizontalScrollbar);
-    ImGui::TextWrapped("%s", cli_log.empty() ? "(no output)" : cli_log.c_str());
-    ImGui::EndChild();
+    render_install_terminal();
     
     if (!selected_server_.homepage.empty()) {
         if (ImGui::Button("View on Smithery", ImVec2(-1, 0))) {
@@ -344,6 +558,28 @@ void MarketplacePanel::render_install_popup() {
         ImGui::Text("Install to:");
         ImGui::RadioButton("Claude Code (global)", &install_target_, 0);
         ImGui::RadioButton("Codex (global)", &install_target_, 1);
+
+        if (is_mcp) {
+            if (install_dir_buffer_[0] == '\0' && !project_directory_.empty()) {
+                std::strncpy(install_dir_buffer_.data(), project_directory_.c_str(), install_dir_buffer_.size() - 1);
+            }
+            ImGui::Spacing();
+            ImGui::Text("Install directory:");
+            ImGui::SetNextItemWidth(360);
+            ImGui::InputText("##InstallDir", install_dir_buffer_.data(), install_dir_buffer_.size());
+            ImGui::SameLine();
+            if (ImGui::Button("Browse...")) {
+                nfdchar_t* out_path = nullptr;
+                nfdresult_t result = NFD_PickFolder(&out_path, nullptr);
+                if (result == NFD_OKAY && out_path) {
+                    std::strncpy(install_dir_buffer_.data(), out_path, install_dir_buffer_.size() - 1);
+                    install_dir_buffer_[install_dir_buffer_.size() - 1] = '\0';
+                }
+                if (out_path) {
+                    NFD_FreePath(out_path);
+                }
+            }
+        }
         
         ImGui::Spacing();
         
@@ -455,15 +691,7 @@ void MarketplacePanel::render_skill_detail() {
     
     ImGui::Spacing();
     ImGui::Separator();
-    std::string cli_log;
-    {
-        std::lock_guard<std::mutex> lock(install_mutex_);
-        cli_log = cli_log_;
-    }
-    ImGui::Text("Smithery CLI Output:");
-    ImGui::BeginChild("SmitheryCliLog", ImVec2(0, 80), true, ImGuiWindowFlags_HorizontalScrollbar);
-    ImGui::TextWrapped("%s", cli_log.empty() ? "(no output)" : cli_log.c_str());
-    ImGui::EndChild();
+    render_install_terminal();
     
     if (!skill.git_url.empty()) {
         if (ImGui::Button("View Repo", ImVec2(-1, 0))) {
@@ -683,6 +911,9 @@ void MarketplacePanel::install_server_cli(const McpServerEntry& server, bool use
         }
         install_in_progress_ = true;
         cli_log_.clear();
+        install_terminal_ = std::make_unique<VTerminal>(24, 80);
+        install_terminal_user_scrolled_ = false;
+        focus_install_terminal_ = true;
         status_message_ = "Installing via Smithery CLI...";
         status_is_error_ = false;
         status_time_ = 3.0f;
@@ -695,44 +926,31 @@ void MarketplacePanel::install_server_cli(const McpServerEntry& server, bool use
     cmd = "bash -lc \"" + cmd + "\"";
 #endif
     cmd += " 2>&1";
-    
+
     std::string display_name = server.display_name.empty() ? pkg : server.display_name;
-    std::thread([this, cmd, display_name]() {
-        FILE* pipe = popen(cmd.c_str(), "r");
-        if (!pipe) {
-            std::lock_guard<std::mutex> lock(install_mutex_);
-            status_message_ = "Error: Failed to start Smithery CLI";
-            status_is_error_ = true;
-            status_time_ = 4.0f;
-            install_in_progress_ = false;
-            return;
+    install_command_queue_.clear();
+    install_command_queue_.push_back(cmd);
+    install_workdir_.clear();
+    if (install_dir_buffer_[0] != '\0') {
+        install_workdir_ = install_dir_buffer_.data();
+    }
+    if (install_workdir_.empty()) {
+        install_workdir_ = project_directory_;
+    }
+    if (install_workdir_.empty()) {
+        const char* home = getenv("HOME");
+        if (home) {
+            install_workdir_ = home;
         }
-        
-        std::array<char, 256> buffer{};
-        while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
-            append_cli_log(buffer.data());
-        }
-        
-        int result = pclose(pipe);
-        std::lock_guard<std::mutex> lock(install_mutex_);
-        if (result != 0) {
-            status_message_ = "Error: Smithery CLI install failed (exit " + std::to_string(result) + ")";
-            status_is_error_ = true;
-            status_time_ = 4.0f;
-            install_in_progress_ = false;
-            return;
-        }
-        
-        status_message_ = "Installed via Smithery CLI: " + display_name;
-        status_is_error_ = false;
-        status_time_ = 3.0f;
-        install_in_progress_ = false;
-    }).detach();
+    }
+
+    install_display_name_ = display_name;
+    start_install_queue();
 }
 
 void MarketplacePanel::append_cli_log(const std::string& line) {
     std::lock_guard<std::mutex> lock(install_mutex_);
-    cli_log_ += line;
+    cli_log_ += strip_ansi_sequences(line);
     if (cli_log_.size() > 4096) {
         cli_log_.erase(0, cli_log_.size() - 4096);
     }
@@ -796,6 +1014,511 @@ void MarketplacePanel::install_skill(const SkillEntry& skill, bool use_claude) {
     status_message_ = "Installed: " + (skill.display_name.empty() ? skill_name : skill.display_name);
     status_is_error_ = false;
     status_time_ = 3.0f;
+}
+
+void MarketplacePanel::render_installed_mcp_list() {
+    if (installed_mcp_items_.empty()) {
+        ImGui::TextDisabled("No installed MCP servers found");
+        return;
+    }
+
+    for (size_t i = 0; i < installed_mcp_items_.size(); ++i) {
+        const auto& item = installed_mcp_items_[i];
+        ImGui::PushID(static_cast<int>(i));
+        bool is_selected = static_cast<int>(i) == selected_installed_mcp_index_;
+        std::string label = item.use_claude ? "Claude Code: " : "Codex: ";
+        label += item.name;
+        if (!item.project_dir.empty()) {
+            label += " (" + item.project_dir + ")";
+        }
+        if (ImGui::Selectable(label.c_str(), is_selected)) {
+            selected_installed_mcp_index_ = static_cast<int>(i);
+        }
+        ImGui::PopID();
+    }
+}
+
+void MarketplacePanel::render_installed_mcp_detail() {
+    if (selected_installed_mcp_index_ < 0 || selected_installed_mcp_index_ >= static_cast<int>(installed_mcp_items_.size())) {
+        ImGui::TextDisabled("Select an installed MCP to view details");
+        return;
+    }
+
+    const auto& item = installed_mcp_items_[selected_installed_mcp_index_];
+    ImGui::TextWrapped("%s", item.name.c_str());
+    ImGui::Text("Target: %s", item.use_claude ? "Claude Code" : "Codex");
+    if (!item.project_dir.empty()) {
+        ImGui::TextWrapped("Project: %s", item.project_dir.c_str());
+    }
+    ImGui::Separator();
+
+    if (!item.config.type.empty()) {
+        ImGui::Text("Type: %s", item.config.type.c_str());
+    }
+    if (!item.config.url.empty()) {
+        ImGui::TextWrapped("URL: %s", item.config.url.c_str());
+    }
+    if (!item.config.command.empty()) {
+        ImGui::TextWrapped("Command: %s", item.config.command.c_str());
+    }
+    if (!item.config.args.empty()) {
+        std::string args;
+        for (size_t i = 0; i < item.config.args.size(); ++i) {
+            if (i > 0) args += " ";
+            args += item.config.args[i];
+        }
+        ImGui::TextWrapped("Args: %s", args.c_str());
+    }
+    if (!item.config.env.empty()) {
+        ImGui::Text("Env:");
+        for (const auto& [key, value] : item.config.env) {
+            ImGui::Text("%s=%s", key.c_str(), value.c_str());
+        }
+    }
+    if (!item.config.headers.empty()) {
+        ImGui::Text("Headers:");
+        for (const auto& [key, value] : item.config.headers) {
+            ImGui::Text("%s: %s", key.c_str(), value.c_str());
+        }
+    }
+
+    ImGui::Spacing();
+    if (ImGui::Button("Remove", ImVec2(-1, 0))) {
+        remove_installed_mcp(item);
+        refresh_installed_mcp();
+    }
+}
+
+void MarketplacePanel::render_installed_skill_list() {
+    if (installed_skill_items_.empty()) {
+        ImGui::TextDisabled("No installed skills found");
+        return;
+    }
+
+    for (size_t i = 0; i < installed_skill_items_.size(); ++i) {
+        const auto& item = installed_skill_items_[i];
+        ImGui::PushID(static_cast<int>(i));
+        bool is_selected = static_cast<int>(i) == selected_installed_skill_index_;
+        std::string label = item.use_claude ? "Claude Code: " : "Codex: ";
+        label += item.name;
+        if (ImGui::Selectable(label.c_str(), is_selected)) {
+            selected_installed_skill_index_ = static_cast<int>(i);
+        }
+        ImGui::PopID();
+    }
+}
+
+void MarketplacePanel::render_installed_skill_detail() {
+    if (selected_installed_skill_index_ < 0 || selected_installed_skill_index_ >= static_cast<int>(installed_skill_items_.size())) {
+        ImGui::TextDisabled("Select an installed skill to view details");
+        return;
+    }
+
+    const auto& item = installed_skill_items_[selected_installed_skill_index_];
+    ImGui::TextWrapped("%s", item.name.c_str());
+    ImGui::Text("Target: %s", item.use_claude ? "Claude Code" : "Codex");
+    ImGui::TextWrapped("Path: %s", item.path.c_str());
+
+    ImGui::Spacing();
+    if (ImGui::Button("Remove", ImVec2(-1, 0))) {
+        remove_installed_skill(item);
+        refresh_installed_skills();
+    }
+}
+
+void MarketplacePanel::refresh_installed_mcp() {
+    installed_mcp_items_.clear();
+    selected_installed_mcp_index_ = -1;
+
+    const char* home = getenv("HOME");
+    if (!home) {
+        return;
+    }
+
+    {
+        std::string config_path = std::string(home) + "/.claude.json";
+        nlohmann::json config;
+        std::ifstream in(config_path);
+        if (in.good()) {
+            try {
+                in >> config;
+            } catch (...) {
+                config = nlohmann::json::object();
+            }
+        }
+        in.close();
+
+        if (config.contains("mcpServers") && config["mcpServers"].is_object()) {
+            for (const auto& [key, value] : config["mcpServers"].items()) {
+                InstalledMcpItem item;
+                item.name = key;
+                item.config = parse_mcp_config(value);
+                item.use_claude = true;
+                installed_mcp_items_.push_back(item);
+            }
+        }
+
+        if (config.contains("projects") && config["projects"].is_object()) {
+            for (const auto& [proj_key, proj_val] : config["projects"].items()) {
+                if (!proj_val.is_object()) {
+                    continue;
+                }
+                if (proj_val.contains("mcpServers") && proj_val["mcpServers"].is_object()) {
+                    for (const auto& [key, value] : proj_val["mcpServers"].items()) {
+                        InstalledMcpItem item;
+                        item.name = key;
+                        item.config = parse_mcp_config(value);
+                        item.use_claude = true;
+                        item.project_dir = proj_key;
+                        installed_mcp_items_.push_back(item);
+                    }
+                }
+            }
+        }
+    }
+
+    {
+        std::string config_path = std::string(home) + "/.codex/config.toml";
+        toml::table tbl;
+        try {
+            tbl = toml::parse_file(config_path);
+        } catch (...) {
+            tbl = toml::table{};
+        }
+
+        if (auto mcp_tbl = tbl["mcp_servers"].as_table()) {
+            for (auto&& [key, value] : *mcp_tbl) {
+                if (auto server_tbl = value.as_table()) {
+                    InstalledMcpItem item;
+                    item.name = std::string(key);
+                    item.use_claude = false;
+                    if (auto v = (*server_tbl)["url"].value<std::string>()) {
+                        item.config.type = "http";
+                        item.config.url = *v;
+                    }
+                    if (auto v = (*server_tbl)["command"].value<std::string>()) {
+                        item.config.type = "stdio";
+                        item.config.command = *v;
+                    }
+                    if (auto arr = (*server_tbl)["args"].as_array()) {
+                        for (auto&& elem : *arr) {
+                            if (auto s = elem.value<std::string>()) item.config.args.push_back(*s);
+                        }
+                    }
+                    if (auto env_tbl = (*server_tbl)["env"].as_table()) {
+                        for (auto&& [k, val] : *env_tbl) {
+                            if (auto s = val.value<std::string>()) item.config.env[std::string(k)] = *s;
+                        }
+                    }
+                    if (auto headers_tbl = (*server_tbl)["http_headers"].as_table()) {
+                        for (auto&& [k, val] : *headers_tbl) {
+                            if (auto s = val.value<std::string>()) item.config.headers[std::string(k)] = *s;
+                        }
+                    }
+                    installed_mcp_items_.push_back(item);
+                }
+            }
+        }
+    }
+
+    std::sort(installed_mcp_items_.begin(), installed_mcp_items_.end(),
+        [](const InstalledMcpItem& a, const InstalledMcpItem& b) {
+            if (a.use_claude != b.use_claude) return a.use_claude > b.use_claude;
+            return a.name < b.name;
+        });
+}
+
+void MarketplacePanel::refresh_installed_skills() {
+    installed_skill_items_.clear();
+    selected_installed_skill_index_ = -1;
+
+    const char* home = getenv("HOME");
+    if (!home) {
+        return;
+    }
+
+    auto load_dir = [this](const std::string& base_dir, bool use_claude) {
+        std::error_code ec;
+        if (!std::filesystem::exists(base_dir, ec)) {
+            return;
+        }
+        for (const auto& entry : std::filesystem::directory_iterator(base_dir, ec)) {
+            if (ec) {
+                return;
+            }
+            if (!entry.is_directory()) {
+                continue;
+            }
+            InstalledSkillItem item;
+            item.name = entry.path().filename().string();
+            item.path = entry.path().string();
+            item.use_claude = use_claude;
+            installed_skill_items_.push_back(item);
+        }
+    };
+
+    load_dir(std::string(home) + "/.claude/skills", true);
+    load_dir(std::string(home) + "/.codex/skills", false);
+
+    std::sort(installed_skill_items_.begin(), installed_skill_items_.end(),
+        [](const InstalledSkillItem& a, const InstalledSkillItem& b) {
+            if (a.use_claude != b.use_claude) return a.use_claude > b.use_claude;
+            return a.name < b.name;
+        });
+}
+
+void MarketplacePanel::remove_installed_mcp(const InstalledMcpItem& item) {
+    const char* home = getenv("HOME");
+    if (!home) {
+        status_message_ = "Error: Cannot find home directory";
+        status_is_error_ = true;
+        status_time_ = 3.0f;
+        return;
+    }
+
+    if (item.use_claude) {
+        std::string config_path = std::string(home) + "/.claude.json";
+        nlohmann::json config;
+        std::ifstream in(config_path);
+        if (in.good()) {
+            try {
+                in >> config;
+            } catch (...) {
+                config = nlohmann::json::object();
+            }
+        }
+        in.close();
+
+        if (!item.project_dir.empty()) {
+            if (config.contains("projects") && config["projects"].is_object()) {
+                auto& projects = config["projects"];
+                if (projects.contains(item.project_dir) && projects[item.project_dir].is_object()) {
+                    auto& proj = projects[item.project_dir];
+                    if (proj.contains("mcpServers") && proj["mcpServers"].is_object()) {
+                        proj["mcpServers"].erase(item.name);
+                    }
+                }
+            }
+        } else if (config.contains("mcpServers") && config["mcpServers"].is_object()) {
+            config["mcpServers"].erase(item.name);
+        }
+
+        std::ofstream out(config_path);
+        if (!out.good()) {
+            status_message_ = "Error: Cannot write to " + config_path;
+            status_is_error_ = true;
+            status_time_ = 3.0f;
+            return;
+        }
+        out << config.dump(2);
+        out.close();
+    } else {
+        std::string config_path = std::string(home) + "/.codex/config.toml";
+        toml::table tbl;
+        try {
+            tbl = toml::parse_file(config_path);
+        } catch (...) {
+            tbl = toml::table{};
+        }
+
+        if (auto mcp_tbl = tbl["mcp_servers"].as_table()) {
+            mcp_tbl->erase(item.name);
+            if (mcp_tbl->empty()) {
+                tbl.erase("mcp_servers");
+            }
+        }
+
+        std::ofstream out(config_path);
+        if (!out.good()) {
+            status_message_ = "Error: Cannot write to " + config_path;
+            status_is_error_ = true;
+            status_time_ = 3.0f;
+            return;
+        }
+        out << tbl;
+        out.close();
+    }
+
+    status_message_ = "Removed: " + item.name;
+    status_is_error_ = false;
+    status_time_ = 3.0f;
+}
+
+void MarketplacePanel::remove_installed_skill(const InstalledSkillItem& item) {
+    std::error_code ec;
+    std::filesystem::remove_all(item.path, ec);
+    if (ec) {
+        status_message_ = "Error: Cannot remove " + item.name;
+        status_is_error_ = true;
+        status_time_ = 3.0f;
+        return;
+    }
+
+    status_message_ = "Removed: " + item.name;
+    status_is_error_ = false;
+    status_time_ = 3.0f;
+}
+
+void MarketplacePanel::render_install_terminal() {
+    ImGui::Text("Smithery CLI Output:");
+    ImGui::BeginChild("InstallTerminal", ImVec2(0, 240), true, ImGuiWindowFlags_HorizontalScrollbar);
+
+    if (focus_install_terminal_) {
+        ImGui::SetWindowFocus();
+        focus_install_terminal_ = false;
+    }
+    if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(0)) {
+        ImGui::SetWindowFocus();
+    }
+
+    ImGuiIO& io = ImGui::GetIO();
+    ImVec2 content_size = ImGui::GetContentRegionAvail();
+    ImVec2 char_size = ImGui::CalcTextSize("W");
+    float line_height = ImGui::GetTextLineHeight();
+    int cols = std::max(1, static_cast<int>(content_size.x / char_size.x));
+    int rows = std::max(1, static_cast<int>(std::ceil(content_size.y / line_height)));
+
+    {
+        std::lock_guard<std::mutex> lock(install_mutex_);
+        if (install_terminal_) {
+            if (install_terminal_->cols() != cols || install_terminal_->rows() != rows) {
+                install_terminal_->resize(rows, cols);
+            }
+
+            const auto& theme = get_current_theme();
+            bool is_light_theme = (theme.kind == ThemeKind::Light);
+            const auto& scrollback = install_terminal_->scrollback();
+            int total_lines = static_cast<int>(scrollback.size()) + install_terminal_->rows();
+
+            ImGuiListClipper clipper;
+            clipper.Begin(total_lines, line_height);
+            ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+            while (clipper.Step()) {
+                for (int line_idx = clipper.DisplayStart; line_idx < clipper.DisplayEnd; ++line_idx) {
+                    ImVec2 start_pos = ImGui::GetCursorScreenPos();
+                    if (line_idx < static_cast<int>(scrollback.size())) {
+                        const auto& line = scrollback[static_cast<size_t>(line_idx)];
+                        render_terminal_line(line.data(), static_cast<int>(line.size()), line_height, draw_list, start_pos, char_size.x, is_light_theme);
+                    } else {
+                        int screen_row = line_idx - static_cast<int>(scrollback.size());
+                        std::vector<TerminalCell> row_cells;
+                        row_cells.reserve(static_cast<size_t>(install_terminal_->cols()));
+                        for (int col = 0; col < install_terminal_->cols(); ++col) {
+                            row_cells.push_back(install_terminal_->get_cell(screen_row, col));
+                        }
+                        render_terminal_line(row_cells.data(), static_cast<int>(row_cells.size()), line_height, draw_list, start_pos, char_size.x, is_light_theme);
+                    }
+                }
+            }
+        }
+    }
+
+    float scroll_max = ImGui::GetScrollMaxY();
+    float scroll_y = ImGui::GetScrollY();
+    if (ImGui::IsWindowHovered() && io.MouseWheel != 0.0f) {
+        install_terminal_user_scrolled_ = true;
+    }
+    if (scroll_max <= 0.0f || scroll_y >= scroll_max - 1.0f) {
+        install_terminal_user_scrolled_ = false;
+    }
+    if (!install_terminal_user_scrolled_ && install_process_.is_running()) {
+        ImGui::SetScrollHereY(1.0f);
+    }
+
+    bool focused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+    if (install_process_.is_running() && focused) {
+        if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
+            install_process_.write_stdin("\n");
+        } else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
+            install_process_.write_stdin("\x7f");
+        } else if (ImGui::IsKeyPressed(ImGuiKey_Tab)) {
+            install_process_.write_stdin("\t");
+        } else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+            install_process_.write_stdin("\x1b[A");
+        } else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+            install_process_.write_stdin("\x1b[B");
+        } else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
+            install_process_.write_stdin("\x1b[D");
+        } else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+            install_process_.write_stdin("\x1b[C");
+        }
+
+        if (!io.KeyCtrl && !io.KeySuper) {
+            for (int i = 0; i < io.InputQueueCharacters.Size; ++i) {
+                ImWchar c = io.InputQueueCharacters[i];
+                if (c > 0 && c != 127) {
+                    char utf8_buf[8];
+                    int len = 0;
+                    utf8_encode(static_cast<uint32_t>(c), utf8_buf, &len);
+                    install_process_.write_stdin(std::string(utf8_buf, utf8_buf + len));
+                }
+            }
+        }
+    }
+
+    ImGui::EndChild();
+}
+
+void MarketplacePanel::start_install_queue() {
+    if (install_process_.is_running() || install_command_queue_.empty()) {
+        return;
+    }
+    start_install_command(install_command_queue_.front());
+}
+
+void MarketplacePanel::start_install_command(const std::string& cmd) {
+    ProcessConfig config;
+    config.executable = "bash";
+    config.args = {"-lc", cmd};
+    config.working_dir = install_workdir_;
+    install_process_.set_output_callback([this](const std::string& data, bool) {
+        {
+            std::lock_guard<std::mutex> lock(install_mutex_);
+            if (install_terminal_) {
+                install_terminal_->write(data.c_str(), data.size());
+            }
+        }
+        append_cli_log(data);
+    });
+    install_process_.set_exit_callback([this](int exit_code) {
+        std::string next_cmd;
+        {
+            std::lock_guard<std::mutex> lock(install_mutex_);
+            if (exit_code != 0) {
+                status_message_ = "Error: Install command failed (exit " + std::to_string(exit_code) + ")";
+                status_is_error_ = true;
+                status_time_ = 4.0f;
+                install_in_progress_ = false;
+                install_command_queue_.clear();
+                return;
+            }
+
+            if (!install_command_queue_.empty()) {
+                install_command_queue_.erase(install_command_queue_.begin());
+            }
+
+            if (install_command_queue_.empty()) {
+                status_message_ = "Installed: " + install_display_name_;
+                status_is_error_ = false;
+                status_time_ = 3.0f;
+                install_in_progress_ = false;
+                return;
+            }
+
+            next_cmd = install_command_queue_.front();
+        }
+        start_install_command(next_cmd);
+    });
+
+    if (!install_process_.start(config)) {
+        std::lock_guard<std::mutex> lock(install_mutex_);
+        status_message_ = "Error: Failed to start install process";
+        status_is_error_ = true;
+        status_time_ = 4.0f;
+        install_in_progress_ = false;
+        install_command_queue_.clear();
+    }
 }
 
 }
