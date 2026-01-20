@@ -830,7 +830,7 @@ void MarketplacePanel::install_server(const McpServerEntry& server, bool project
     out << config.dump(2);
     out.close();
     
-    status_message_ = "Installed: " + server.display_name;
+    status_message_ = "Install completed: " + server.display_name;
     status_is_error_ = false;
     status_time_ = 3.0f;
     
@@ -950,14 +950,35 @@ void MarketplacePanel::install_server_cli(const McpServerEntry& server, bool use
 
 void MarketplacePanel::append_cli_log(const std::string& line) {
     std::lock_guard<std::mutex> lock(install_mutex_);
-    cli_log_ += strip_ansi_sequences(line);
+    std::string cleaned = strip_ansi_sequences(line);
+    cli_log_ += cleaned;
+    if (!install_process_.is_running() && install_terminal_) {
+        install_terminal_->write(cleaned.c_str(), cleaned.size());
+    }
     if (cli_log_.size() > 4096) {
         cli_log_.erase(0, cli_log_.size() - 4096);
     }
 }
 
 void MarketplacePanel::install_skill(const SkillEntry& skill, bool use_claude) {
-    cli_log_.clear();
+    {
+        std::lock_guard<std::mutex> lock(install_mutex_);
+        if (install_in_progress_) {
+            status_message_ = "Install already in progress";
+            status_is_error_ = true;
+            status_time_ = 3.0f;
+            return;
+        }
+        install_in_progress_ = true;
+        cli_log_.clear();
+        install_terminal_ = std::make_unique<VTerminal>(24, 80);
+        install_terminal_user_scrolled_ = false;
+        focus_install_terminal_ = true;
+        status_message_ = "Installing skill...";
+        status_is_error_ = false;
+        status_time_ = 3.0f;
+    }
+
     append_cli_log("Installing skill...\n");
 
     std::string base_dir;
@@ -967,6 +988,7 @@ void MarketplacePanel::install_skill(const SkillEntry& skill, bool use_claude) {
         status_is_error_ = true;
         status_time_ = 3.0f;
         append_cli_log("Error: HOME not set\n");
+        install_in_progress_ = false;
         return;
     }
     
@@ -987,6 +1009,7 @@ void MarketplacePanel::install_skill(const SkillEntry& skill, bool use_claude) {
         status_is_error_ = true;
         status_time_ = 3.0f;
         append_cli_log("Error: Cannot create directory " + skill_dir + "\n");
+        install_in_progress_ = false;
         return;
     }
     
@@ -996,6 +1019,7 @@ void MarketplacePanel::install_skill(const SkillEntry& skill, bool use_claude) {
         status_is_error_ = true;
         status_time_ = 3.0f;
         append_cli_log("Error: Cannot write " + skill_path + "\n");
+        install_in_progress_ = false;
         return;
     }
     
@@ -1011,9 +1035,10 @@ void MarketplacePanel::install_skill(const SkillEntry& skill, bool use_claude) {
     out.close();
     
     append_cli_log("Wrote " + skill_path + "\n");
-    status_message_ = "Installed: " + (skill.display_name.empty() ? skill_name : skill.display_name);
+    status_message_ = "Install completed: " + (skill.display_name.empty() ? skill_name : skill.display_name);
     status_is_error_ = false;
     status_time_ = 3.0f;
+    install_in_progress_ = false;
 }
 
 void MarketplacePanel::render_installed_mcp_list() {
@@ -1375,8 +1400,8 @@ void MarketplacePanel::render_install_terminal() {
     ImVec2 content_size = ImGui::GetContentRegionAvail();
     ImVec2 char_size = ImGui::CalcTextSize("W");
     float line_height = ImGui::GetTextLineHeight();
-    int cols = std::max(1, static_cast<int>(content_size.x / char_size.x));
-    int rows = std::max(1, static_cast<int>(std::ceil(content_size.y / line_height)));
+    int cols = std::max(80, static_cast<int>(content_size.x / char_size.x));
+    int rows = std::max(10, static_cast<int>(std::ceil(content_size.y / line_height)));
 
     {
         std::lock_guard<std::mutex> lock(install_mutex_);
@@ -1422,7 +1447,7 @@ void MarketplacePanel::render_install_terminal() {
     if (scroll_max <= 0.0f || scroll_y >= scroll_max - 1.0f) {
         install_terminal_user_scrolled_ = false;
     }
-    if (!install_terminal_user_scrolled_ && install_process_.is_running()) {
+    if (!install_terminal_user_scrolled_) {
         ImGui::SetScrollHereY(1.0f);
     }
 
@@ -1499,7 +1524,7 @@ void MarketplacePanel::start_install_command(const std::string& cmd) {
             }
 
             if (install_command_queue_.empty()) {
-                status_message_ = "Installed: " + install_display_name_;
+                status_message_ = "Install completed: " + install_display_name_;
                 status_is_error_ = false;
                 status_time_ = 3.0f;
                 install_in_progress_ = false;
