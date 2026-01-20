@@ -55,14 +55,17 @@ See the [Build](#build) section below.
 - Supports Claude Code, Codex, and OpenCode
 - Automatic executable detection for agents installed via nvm, Volta, asdf, Cargo, or global npm
 - Provider/model configuration switching with atomic file updates
-- Real-time token usage monitoring with charts
+- Real-time token usage monitoring with charts (Claude Code, Codex, OpenCode)
 - Per-project token metrics tracking
-- Config import/export for backup and sharing
+- Config import/export for backup and sharing (includes Diana's own config files)
 - Claude Code multi-profile configuration management
 - OpenCode multi-profile configuration management
 - Unified Agent Config panel with tab switching and fast in-app edits
 - GitHub-style activity heatmap for token usage
 - Double-click session tabs to rename
+- **MCP Marketplace** - Browse and install MCP servers and skills from [Smithery.ai](https://smithery.ai)
+- **Keyboard shortcuts** - Quick panel toggles with Cmd+1/2/3/4
+- **Terminal clipboard** - Text selection, copy (Cmd+C), and paste (Cmd+V) support
 
 ## Supported Agents
 
@@ -178,6 +181,7 @@ Generate an app-specific password at [appleid.apple.com](https://appleid.apple.c
 - Double-click a session tab to rename it
 - Type in the input field and press Enter to send commands
 - Click "Stop" to terminate the agent
+- Select text with mouse drag, copy with Cmd+C, paste with Cmd+V
 
 Diana automatically detects agent executables installed via:
 
@@ -232,6 +236,28 @@ The Agent Config panel provides unified access to both Claude Code and OpenCode 
 - Session list with subagent detection
 - GitHub-style activity heatmap (last 365 days)
 
+### Marketplace Panel
+
+- Browse and install MCP servers and skills from [Smithery.ai](https://smithery.ai)
+- Search by keyword with paginated results
+- View server/skill details: verification status, use count, stars, forks
+- Install MCP servers to Claude Code or Codex with one click
+- Install skills to Claude Code
+- View and manage installed MCPs and skills
+- Terminal-based install output for debugging
+- Configure Smithery API key for authenticated access
+
+### Keyboard Shortcuts
+
+| Shortcut | Action |
+| -------- | ------ |
+| Cmd+1    | Toggle Terminal Panel |
+| Cmd+2    | Toggle Agent Config Panel |
+| Cmd+3    | Toggle Token Metrics Panel |
+| Cmd+4    | Toggle Agent Token Stats Panel |
+| Cmd+C    | Copy selected terminal text |
+| Cmd+V    | Paste into terminal |
+
 ## Architecture
 
 ```
@@ -263,11 +289,17 @@ diana/
 │   │   ├── opencode_config.h/cpp     # Full OpenCode config struct
 │   │   ├── opencode_profile_store.h/cpp # OpenCode multi-profile CRUD
 │   │   ├── config_manager.h/cpp      # Unified config access facade
-│   │   └── config_exporter.h/cpp     # JSON export/import utilities
+│   │   ├── config_exporter.h/cpp     # JSON export/import utilities
+│   │   └── marketplace_settings.h/cpp # Smithery API key storage
+│   ├── marketplace/
+│   │   ├── marketplace_panel.h/cpp   # MCP/Skill browser UI
+│   │   ├── marketplace_client.h/cpp  # Smithery API client
+│   │   └── marketplace_types.h       # MCP/Skill data structures
 │   ├── metrics/
 │   │   ├── metrics_store.h/cpp       # Token metrics with EMA smoothing
 │   │   ├── multi_metrics_store.h/cpp # Per-project metrics hub
 │   │   ├── claude_usage_collector.h/cpp # Claude JSONL file watcher
+│   │   ├── codex_usage_collector.h/cpp # Codex log parser
 │   │   ├── opencode_usage_collector.h/cpp # OpenCode storage parser
 │   │   └── agent_token_store.h/cpp   # Per-agent token aggregation
 │   └── ui/
@@ -312,15 +344,17 @@ diana/
 │  ┌───────────────────┐  ┌─────────────────┐  ┌─────────────────────┐ │
 │  │ AgentConfigPanel  │  │  TerminalPanel  │  │   MetricsPanel      │ │
 │  │ (Claude+OpenCode) │  │  (Multi-tab)    │  │   AgentTokenPanel   │ │
+│  │ MarketplacePanel  │  │                 │  │                     │ │
 │  └────────┬──────────┘  └────────┬────────┘  └──────────┬──────────┘ │
 └───────────┼──────────────────────┼──────────────────────┼────────────┘
             │                      │                      │
             ▼                      ▼                      ▼
 ┌────────────────────┐  ┌──────────────────┐  ┌─────────────────────────────┐
 │  ProfileStore      │  │ SessionController│  │  ClaudeUsageCollector       │
-│  (Claude+OpenCode) │  │  ProcessRunner   │  │  OpenCodeUsageCollector     │
-│  ConfigManager     │  │  VTerminal       │  │  MultiMetricsStore          │
-│  ConfigExporter    │  └────────┬─────────┘  │  AgentTokenStore            │
+│  (Claude+OpenCode) │  │  ProcessRunner   │  │  CodexUsageCollector        │
+│  ConfigManager     │  │  VTerminal       │  │  OpenCodeUsageCollector     │
+│  ConfigExporter    │  └────────┬─────────┘  │  MultiMetricsStore          │
+│  MarketplaceClient │           │            │  AgentTokenStore            │
 └─────────┬──────────┘           │            └───────────┬─────────────────┘
           │                      │                        │
           ▼                      ▼                        ▼
@@ -367,13 +401,15 @@ diana/
 
 ```
 Claude Code JSONL logs (projects/transcripts)
+Codex logs (~/.codex/*)
 $XDG_DATA_HOME/opencode/storage/{project,session,message}/
             │
             ├─────────────────────────────┐
             ▼                             ▼
 ┌────────────────────────────┐    ┌───────────────────┐
 │ ClaudeUsageCollector       │    │ AgentTokenStore   │
-│ OpenCodeUsageCollector     │    │ (Claude+OpenCode) │
+│ CodexUsageCollector        │    │ (Claude+Codex+    │
+│ OpenCodeUsageCollector     │    │  OpenCode)        │
 └───────────┬────────────────┘    └──────────┬────────┘
             │                               │
             ▼                               ▼
@@ -413,7 +449,7 @@ The project includes 87 unit tests covering core functionality:
 
 ## Roadmap
 
-- [ ] Claude Code Skill/MCP marketplace browser
+- [x] Claude Code Skill/MCP marketplace browser
 - [x] OpenCode configuration panel (similar to Claude Code)
 - [x] Codex configuration panel (similar to Claude Code)
 - [x] Agent token stats panel with per-agent aggregation
@@ -421,6 +457,7 @@ The project includes 87 unit tests covering core functionality:
 - [x] GitHub-style activity heatmap
 - [x] Session history and replay
 - [x] Cost estimation and budget alerts
+- [ ] Linux/Windows support
 
 ## Dependencies
 
