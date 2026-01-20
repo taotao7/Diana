@@ -239,7 +239,10 @@ void MarketplacePanel::render_content() {
     }
     
     if (status_time > 0) {
-        ImVec4 color = status_is_error ? ImVec4(1, 0.4f, 0.4f, 1) : ImVec4(0.4f, 1, 0.4f, 1);
+        const auto& theme = get_current_theme();
+        ImVec4 color = status_is_error
+            ? ImGui::ColorConvertU32ToFloat4(theme.error)
+            : ImGui::ColorConvertU32ToFloat4(theme.accent);
         ImGui::TextColored(color, "%s", status_message.c_str());
     }
     
