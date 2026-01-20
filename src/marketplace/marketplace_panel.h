@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <mutex>
 
 
 namespace diana {
@@ -79,6 +80,9 @@ private:
     
     float mcp_detail_width_ = 300.0f;
     float skill_detail_width_ = 320.0f;
+    bool initial_fetch_done_ = false;
+    std::mutex install_mutex_;
+    bool install_in_progress_ = false;
 };
 
 }

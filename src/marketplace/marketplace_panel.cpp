@@ -6,6 +6,8 @@
 #include <toml++/toml.hpp>
 #include <array>
 #include <cstdio>
+#include <thread>
+#include <mutex>
 
 namespace diana {
 
@@ -41,17 +43,35 @@ void MarketplacePanel::render() {
 void MarketplacePanel::render_content() {
     client_.poll();
     
-    if (status_time_ > 0) {
-        ImVec4 color = status_is_error_ ? ImVec4(1, 0.4f, 0.4f, 1) : ImVec4(0.4f, 1, 0.4f, 1);
-        ImGui::TextColored(color, "%s", status_message_.c_str());
-        status_time_ -= ImGui::GetIO().DeltaTime;
+    if (!initial_fetch_done_ && !api_key_buffer_.empty() && api_key_buffer_[0] != '\0') {
+        initial_fetch_done_ = true;
+        search_query_.clear();
+        do_search(1);
+        do_skill_search(1);
+    }
+    
+    std::string status_message;
+    bool status_is_error = false;
+    float status_time = 0.0f;
+    {
+        std::lock_guard<std::mutex> lock(install_mutex_);
+        if (status_time_ > 0) {
+            status_time_ -= ImGui::GetIO().DeltaTime;
+        }
+        status_message = status_message_;
+        status_is_error = status_is_error_;
+        status_time = status_time_;
+    }
+    
+    if (status_time > 0) {
+        ImVec4 color = status_is_error ? ImVec4(1, 0.4f, 0.4f, 1) : ImVec4(0.4f, 1, 0.4f, 1);
+        ImGui::TextColored(color, "%s", status_message.c_str());
     }
     
     if (ImGui::BeginTabBar("MarketplaceTabs")) {
         if (ImGui::BeginTabItem("MCP")) {
             marketplace_tab_ = 0;
             render_search_bar();
-            ImGui::Separator();
             
             float avail_width = ImGui::GetContentRegionAvail().x;
             float spacing = ImGui::GetStyle().ItemSpacing.x;
@@ -85,7 +105,6 @@ void MarketplacePanel::render_content() {
         if (ImGui::BeginTabItem("Skills")) {
             marketplace_tab_ = 1;
             render_search_bar();
-            ImGui::Separator();
             
             float avail_width = ImGui::GetContentRegionAvail().x;
             float spacing = ImGui::GetStyle().ItemSpacing.x;
@@ -176,6 +195,15 @@ void MarketplacePanel::render_search_bar() {
         settings.smithery_api_key = api_key_buffer_.data();
         settings_store_.save(settings);
     }
+    ImGui::SameLine();
+    if (ImGui::SmallButton("Get API Key")) {
+#ifdef __APPLE__
+        system("open \"https://smithery.ai/account/api-keys\"");
+#endif
+    }
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("Open https://smithery.ai/account/api-keys");
+    }
 }
 
 void MarketplacePanel::render_server_list() {
@@ -206,7 +234,8 @@ void MarketplacePanel::render_server_list() {
         }
         
         if (ImGui::Selectable(label.c_str(), is_selected)) {
-            select_server(server);
+            selected_server_ = server;
+            detail_state_ = FetchState::Success;
         }
         
         if (ImGui::IsItemHovered()) {
@@ -249,17 +278,6 @@ void MarketplacePanel::render_server_detail() {
         return;
     }
     
-    if (detail_state_ == FetchState::Loading) {
-        ImGui::TextDisabled("Loading details...");
-        return;
-    }
-    
-    if (detail_state_ == FetchState::Error) {
-        ImGui::TextColored(ImVec4(1, 0.4f, 0.4f, 1), "Error:");
-        ImGui::TextWrapped("%s", detail_error_.c_str());
-        return;
-    }
-    
     ImGui::TextWrapped("%s", selected_server_.display_name.c_str());
     
     if (selected_server_.verified) {
@@ -289,9 +307,14 @@ void MarketplacePanel::render_server_detail() {
     
     ImGui::Spacing();
     ImGui::Separator();
+    std::string cli_log;
+    {
+        std::lock_guard<std::mutex> lock(install_mutex_);
+        cli_log = cli_log_;
+    }
     ImGui::Text("Smithery CLI Output:");
     ImGui::BeginChild("SmitheryCliLog", ImVec2(0, 80), true, ImGuiWindowFlags_HorizontalScrollbar);
-    ImGui::TextWrapped("%s", cli_log_.empty() ? "(no output)" : cli_log_.c_str());
+    ImGui::TextWrapped("%s", cli_log.empty() ? "(no output)" : cli_log.c_str());
     ImGui::EndChild();
     
     if (!selected_server_.homepage.empty()) {
@@ -318,7 +341,6 @@ void MarketplacePanel::render_install_popup() {
         ImGui::Text("Install \"%s\"", title);
         ImGui::Separator();
         
-        ImGui::Text("Install to:");
         ImGui::Text("Install to:");
         ImGui::RadioButton("Claude Code (global)", &install_target_, 0);
         ImGui::RadioButton("Codex (global)", &install_target_, 1);
@@ -433,9 +455,14 @@ void MarketplacePanel::render_skill_detail() {
     
     ImGui::Spacing();
     ImGui::Separator();
+    std::string cli_log;
+    {
+        std::lock_guard<std::mutex> lock(install_mutex_);
+        cli_log = cli_log_;
+    }
     ImGui::Text("Smithery CLI Output:");
     ImGui::BeginChild("SmitheryCliLog", ImVec2(0, 80), true, ImGuiWindowFlags_HorizontalScrollbar);
-    ImGui::TextWrapped("%s", cli_log_.empty() ? "(no output)" : cli_log_.c_str());
+    ImGui::TextWrapped("%s", cli_log.empty() ? "(no output)" : cli_log.c_str());
     ImGui::EndChild();
     
     if (!skill.git_url.empty()) {
@@ -640,48 +667,71 @@ void MarketplacePanel::install_server_codex(const McpServerEntry& server) {
 void MarketplacePanel::install_server_cli(const McpServerEntry& server, bool use_claude) {
     std::string key = api_key_buffer_.data();
     if (key.empty()) {
+        std::lock_guard<std::mutex> lock(install_mutex_);
         status_message_ = "Error: Smithery API key is required";
         status_is_error_ = true;
         status_time_ = 3.0f;
         return;
     }
+    {
+        std::lock_guard<std::mutex> lock(install_mutex_);
+        if (install_in_progress_) {
+            status_message_ = "Install already in progress";
+            status_is_error_ = true;
+            status_time_ = 3.0f;
+            return;
+        }
+        install_in_progress_ = true;
+        cli_log_.clear();
+        status_message_ = "Installing via Smithery CLI...";
+        status_is_error_ = false;
+        status_time_ = 3.0f;
+    }
     
-    std::string client = use_claude ? "claude" : "codex";
+    std::string client = use_claude ? "claude-code" : "codex";
     std::string pkg = !server.qualified_name.empty() ? server.qualified_name : server.id;
-    std::string cmd = "npx -y @smithery/cli@latest install " + pkg + " --client " + client + " --key \"" + key + "\"";
+    std::string cmd = "SMITHERY_API_KEY='" + key + "' npx -y @smithery/cli@latest install " + pkg + " --client " + client;
 #ifdef __APPLE__
     cmd = "bash -lc \"" + cmd + "\"";
 #endif
     cmd += " 2>&1";
     
-    FILE* pipe = popen(cmd.c_str(), "r");
-    if (!pipe) {
-        status_message_ = "Error: Failed to start Smithery CLI";
-        status_is_error_ = true;
-        status_time_ = 4.0f;
-        return;
-    }
-    
-    cli_log_.clear();
-    std::array<char, 256> buffer{};
-    while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
-        append_cli_log(buffer.data());
-    }
-    
-    int result = pclose(pipe);
-    if (result != 0) {
-        status_message_ = "Error: Smithery CLI install failed (exit " + std::to_string(result) + ")";
-        status_is_error_ = true;
-        status_time_ = 4.0f;
-        return;
-    }
-    
-    status_message_ = "Installed via Smithery CLI: " + server.display_name;
-    status_is_error_ = false;
-    status_time_ = 3.0f;
+    std::string display_name = server.display_name.empty() ? pkg : server.display_name;
+    std::thread([this, cmd, display_name]() {
+        FILE* pipe = popen(cmd.c_str(), "r");
+        if (!pipe) {
+            std::lock_guard<std::mutex> lock(install_mutex_);
+            status_message_ = "Error: Failed to start Smithery CLI";
+            status_is_error_ = true;
+            status_time_ = 4.0f;
+            install_in_progress_ = false;
+            return;
+        }
+        
+        std::array<char, 256> buffer{};
+        while (fgets(buffer.data(), static_cast<int>(buffer.size()), pipe) != nullptr) {
+            append_cli_log(buffer.data());
+        }
+        
+        int result = pclose(pipe);
+        std::lock_guard<std::mutex> lock(install_mutex_);
+        if (result != 0) {
+            status_message_ = "Error: Smithery CLI install failed (exit " + std::to_string(result) + ")";
+            status_is_error_ = true;
+            status_time_ = 4.0f;
+            install_in_progress_ = false;
+            return;
+        }
+        
+        status_message_ = "Installed via Smithery CLI: " + display_name;
+        status_is_error_ = false;
+        status_time_ = 3.0f;
+        install_in_progress_ = false;
+    }).detach();
 }
 
 void MarketplacePanel::append_cli_log(const std::string& line) {
+    std::lock_guard<std::mutex> lock(install_mutex_);
     cli_log_ += line;
     if (cli_log_.size() > 4096) {
         cli_log_.erase(0, cli_log_.size() - 4096);

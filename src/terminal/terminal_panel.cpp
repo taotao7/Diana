@@ -615,6 +615,11 @@ void TerminalPanel::render_output_area(TerminalSession& session) {
                 
                 ImVec2 content_start = ImGui::GetCursorScreenPos();
                 float scroll_y = ImGui::GetScrollY();
+                auto& last_scroll = last_scroll_y_[session.id()];
+                if (std::abs(scroll_y - last_scroll) > 0.5f) {
+                    cursor_animations_[session.id()].initialized = false;
+                    last_scroll = scroll_y;
+                }
                 
                 const auto& scrollback = terminal.scrollback();
                 int total_lines = static_cast<int>(scrollback.size()) + terminal.rows();
@@ -758,6 +763,14 @@ void TerminalPanel::render_cursor(TerminalSession& session, float target_x, floa
     bool cursor_moved = (anim.target_x != target_x || anim.target_y != target_y);
     anim.target_x = target_x;
     anim.target_y = target_y;
+    float target_dx = anim.target_x - anim.current_x;
+    float target_dy = anim.target_y - anim.current_y;
+    if (std::abs(target_dx) > char_w * 2.0f || std::abs(target_dy) > char_h * 2.0f) {
+        anim.current_x = anim.target_x;
+        anim.current_y = anim.target_y;
+        anim.velocity_x = 0.0f;
+        anim.velocity_y = 0.0f;
+    }
     
     constexpr float SPRING_STIFFNESS = 100.0f;
     constexpr float DAMPING = 12.0f;
@@ -1160,7 +1173,7 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                     controller_.send_raw_key(session, "\x1f");
                 }
             }
-            else if (!handled_paste && !has_ime_input) {
+            if (!handled_paste && !has_ime_input) {
                 if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
                     if (io.KeyShift) {
                         controller_.send_char(session, '\n');
@@ -1168,43 +1181,43 @@ void TerminalPanel::render_input_line(TerminalSession& session) {
                         controller_.send_key(session, VTERM_KEY_ENTER);
                     }
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
                     controller_.send_key(session, VTERM_KEY_ESCAPE);
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_Backspace)) {
                     controller_.send_key(session, VTERM_KEY_BACKSPACE);
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Tab) && io.KeyShift) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_Tab) && io.KeyShift) {
                     controller_.send_raw_key(session, "\x1b[Z");
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Tab)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_Tab)) {
                     controller_.send_key(session, VTERM_KEY_TAB);
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
                     controller_.send_key(session, VTERM_KEY_UP);
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
                     controller_.send_key(session, VTERM_KEY_DOWN);
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_RightArrow)) {
                     controller_.send_key(session, VTERM_KEY_RIGHT);
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_LeftArrow)) {
                     controller_.send_key(session, VTERM_KEY_LEFT);
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Delete)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_Delete)) {
                     controller_.send_key(session, VTERM_KEY_DEL);
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_Home)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_Home)) {
                     controller_.send_key(session, VTERM_KEY_HOME);
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_End)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_End)) {
                     controller_.send_key(session, VTERM_KEY_END);
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_PageUp)) {
                     controller_.send_key(session, VTERM_KEY_PAGEUP);
                 }
-                else if (ctrl_pressed && ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
+                else if (ImGui::IsKeyPressed(ImGuiKey_PageDown)) {
                     controller_.send_key(session, VTERM_KEY_PAGEDOWN);
                 }
             }

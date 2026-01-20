@@ -85,6 +85,7 @@ private:
     std::unordered_map<uint32_t, CursorAnimation> cursor_animations_;
     std::unordered_map<uint32_t, std::string> cpr_buffers_;
     std::unordered_map<uint32_t, Selection> selections_;
+    std::unordered_map<uint32_t, float> last_scroll_y_;
     
     SessionConfigStore config_store_;
 };
