@@ -944,7 +944,6 @@ void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count, f
         }
     }
     
-    int col = 0;
     for (int i = 0; i < count; ++i) {
         const auto& cell = cells[i];
         
@@ -970,6 +969,14 @@ void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count, f
             uint32_t sel_color = is_light_theme ? 0x40000000 : 0x40FFFFFF;
             draw_list->AddRectFilled(sel_min, sel_max, sel_color);
         }
+    }
+
+    for (int i = 0; i < count; ++i) {
+        const auto& cell = cells[i];
+        
+        if (cell.width == 0) {
+            continue;
+        }
         
         if (cell.chars[0] != 0 && cell.chars[0] != ' ' && cell.chars[0] <= 0x10FFFF) {
             char utf8_buf[32];
@@ -988,12 +995,11 @@ void TerminalPanel::render_terminal_line(const TerminalCell* cells, int count, f
             utf8_buf[utf8_len] = '\0';
             
             if (utf8_len > 0) {
+                float cell_x = start_pos.x + i * char_size.x;
                 uint32_t fg = adjust_fg_for_light_theme(cell.fg, is_light_theme);
                 draw_list->AddText(ImVec2(cell_x, start_pos.y), fg, utf8_buf);
             }
         }
-        
-        col += cell.width;
     }
     
     ImGui::Dummy(ImVec2(count * char_size.x, line_height));

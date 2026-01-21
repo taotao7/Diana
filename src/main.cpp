@@ -136,6 +136,36 @@ static std::vector<fs::path> build_font_load_order(const std::vector<fs::path>& 
     return ordered;
 }
 
+static bool is_unifont_font(const fs::path& font_path) {
+    std::string name = font_path.stem().string();
+    std::transform(name.begin(), name.end(), name.begin(), [](unsigned char c) {
+        return static_cast<char>(std::tolower(c));
+    });
+    return name.find("unifont") != std::string::npos;
+}
+
+static std::vector<fs::path> collect_system_cjk_fonts() {
+    std::vector<fs::path> fonts;
+#if defined(__APPLE__)
+    const char* candidates[] = {
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/Supplemental/PingFang.ttc",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/System/Library/Fonts/Supplemental/STHeiti Light.ttc",
+        "/System/Library/Fonts/Supplemental/STHeiti Medium.ttc",
+        "/System/Library/Fonts/Supplemental/Heiti SC.ttc",
+    };
+    for (const auto* path : candidates) {
+        std::error_code ec;
+        fs::path font_path(path);
+        if (fs::exists(font_path, ec) && !ec) {
+            fonts.push_back(font_path);
+        }
+    }
+#endif
+    return fonts;
+}
+
 extern "C" bool diana_is_ctrl_pressed() {
     if (!g_main_window) return false;
     return glfwGetKey(g_main_window, GLFW_KEY_LEFT_CONTROL) == GLFW_PRESS ||
@@ -227,7 +257,11 @@ int main(int argc, char** argv) {
         0x25A0, 0x25FF,
         0x2600, 0x26FF,
         0x3000, 0x303F,
-        0x4E00, 0x9FA5,
+        0x3040, 0x309F,
+        0x30A0, 0x30FF,
+        0x3400, 0x4DBF,
+        0x4E00, 0x9FFF,
+        0xF900, 0xFAFF,
         0xFF00, 0xFFEF,
         0,
     };
@@ -235,6 +269,8 @@ int main(int argc, char** argv) {
     const float font_size = 16.0f;
     const fs::path fonts_dir = find_fonts_directory(argv ? argv[0] : "");
     std::vector<fs::path> load_order = build_font_load_order(collect_font_files(fonts_dir));
+    const std::vector<fs::path> system_cjk_fonts = collect_system_cjk_fonts();
+    const bool has_system_cjk = !system_cjk_fonts.empty();
 
     ImFont* font = nullptr;
     if (!load_order.empty()) {
@@ -245,7 +281,23 @@ int main(int argc, char** argv) {
             ImFontConfig merge_config = font_config;
             merge_config.MergeMode = true;
             for (size_t i = 1; i < load_order.size(); ++i) {
+                if (has_system_cjk && is_unifont_font(load_order[i])) {
+                    continue;
+                }
                 io.Fonts->AddFontFromFileTTF(load_order[i].string().c_str(), font_size, &merge_config, fallback_ranges);
+            }
+
+            for (const auto& system_font : system_cjk_fonts) {
+                io.Fonts->AddFontFromFileTTF(system_font.string().c_str(), font_size, &merge_config, fallback_ranges);
+            }
+
+            if (has_system_cjk) {
+                for (size_t i = 1; i < load_order.size(); ++i) {
+                    if (!is_unifont_font(load_order[i])) {
+                        continue;
+                    }
+                    io.Fonts->AddFontFromFileTTF(load_order[i].string().c_str(), font_size, &merge_config, fallback_ranges);
+                }
             }
         }
     }
